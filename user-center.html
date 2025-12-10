@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<!-- 页面：用户中心 -->
+<!-- 结构：导航栏 / 左侧标签栏 / 右侧内容区 -->
+<!-- 功能：个人信息管理 / 学情检测（学生）/ 学生信息查询（教师）/ 教学建议（教师） -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>用户中心 - 轨道交通运营管理课程</title>
+    <style>
+      /* 全局样式重置 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f9f9f9;
+      }
+
+      /* 导航栏样式 */
+      nav {
+        background-color: #2c3e50;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
+      }
+
+      nav ul {
+        list-style-type: none;
+        display: flex;
+        margin: 0;
+        padding: 0;
+      }
+
+      nav ul li {
+        margin-right: 20px;
+        display: flex;
+        align-items: center;
+      }
+
+      nav ul li a {
+        color: white;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        transition: background-color 0.3s ease, color 0.3s ease;
+        display: inline-block;
+        line-height: normal;
+      }
+
+      nav ul li a:hover {
+        background-color: #34495e;
+        color: #f1c40f;
+      }
+
+      .nav-right {
+        margin-left: auto;
+      }
+
+      /* 主容器布局 */
+      .main-container {
+        display: flex;
+        max-width: 1400px;
+        margin: 20px auto;
+        gap: 20px;
+        padding: 0 20px;
+      }
+
+      /* 左侧标签栏 */
+      .sidebar {
+        width: 200px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 20px 0;
+        height: fit-content;
+      }
+
+      .sidebar-item {
+        padding: 15px 20px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        border-left: 3px solid transparent;
+      }
+
+      .sidebar-item:hover {
+        background-color: #f0f0f0;
+      }
+
+      .sidebar-item.active {
+        background-color: #ecf0f1;
+        border-left: 3px solid #f1c40f;
+        color: #2c3e50;
+        font-weight: bold;
+      }
+
+      /* 右侧内容区 */
+      .content-area {
+        flex: 1;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+        min-height: 500px;
+      }
+
+      .content-section {
+        display: none;
+      }
+
+      .content-section.active {
+        display: block;
+      }
+
+      h1 {
+        color: #2c3e50;
+        margin-bottom: 30px;
+        font-size: 2rem;
+        border-bottom: 2px solid #f1c40f;
+        padding-bottom: 10px;
+      }
+
+      /* 表单样式 */
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        color: #555;
+        font-weight: 500;
+      }
+
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .form-group input:disabled {
+        background-color: #f5f5f5;
+        cursor: not-allowed;
+      }
+
+      .form-group input:focus {
+        outline: none;
+        border-color: #f1c40f;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        background-color: #2c3e50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s ease;
+      }
+
+      .btn:hover {
+        background-color: #34495e;
+      }
+
+      .btn-primary {
+        background-color: #3498db;
+      }
+
+      .btn-primary:hover {
+        background-color: #2980b9;
+      }
+
+      /* 筛选器样式 */
+      .filter-container {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        align-items: flex-end;
+      }
+
+      .filter-container .form-group {
+        margin-bottom: 0;
+        flex: 1;
+      }
+
+      /* 表格样式 */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+
+      table th,
+      table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      table th {
+        background-color: #2c3e50;
+        color: white;
+        font-weight: 500;
+      }
+
+      table tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .message {
+        padding: 10px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+        display: none;
+      }
+
+      .message.success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .message.error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 768px) {
+        .main-container {
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+        }
+
+        .filter-container {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        nav ul {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        nav ul li {
+          margin: 10px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav>
+      <ul class="nav-left">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="./knowledge-graph.html">知识图谱</a></li>
+        <li><a href="./aiqa.html">AI问答</a></li>
+        <li><a href="./test.html">知识测试</a></li>
+        <li><a href="./resources.html">课程资源</a></li>
+      </ul>
+      <ul class="nav-right">
+        <li class="user-info" id="user-info" style="display: none">
+          <a href="./user-center.html" id="user-link"
+            >欢迎,<span id="username"></span
+          ></a>
+        </li>
+        <li>
+          <a
+            href="javascript:void(0)"
+            onclick="logout()"
+            id="logout-link"
+            style="display: none"
+            >退出</a
+          >
+        </li>
+        <li><a href="./login.html" id="login-link">登录</a></li>
+        <li><a href="./register.html" id="register-link">注册</a></li>
+      </ul>
+    </nav>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+      <!-- 左侧标签栏 -->
+      <div class="sidebar" id="sidebar">
+        <!-- 标签项将通过JavaScript动态生成 -->
+      </div>
+
+      <!-- 右侧内容区 -->
+      <div class="content-area">
+        <!-- 个人信息区域 -->
+        <div class="content-section active" id="profile-section">
+          <h1>个人信息</h1>
+          <div class="message" id="profile-message"></div>
+          <form id="profile-form">
+            <div class="form-group">
+              <label for="user-id">学号/工号</label>
+              <input type="text" id="user-id" disabled />
+            </div>
+            <div class="form-group">
+              <label for="user-name">姓名</label>
+              <input type="text" id="user-name" required />
+            </div>
+            <div class="form-group" id="grade-group" style="display: none">
+              <label for="user-grade">年级</label>
+              <input type="text" id="user-grade" />
+            </div>
+            <div class="form-group">
+              <label for="user-phone">电话</label>
+              <input type="tel" id="user-phone" required />
+            </div>
+            <div class="form-group">
+              <label for="user-email">邮箱</label>
+              <input type="email" id="user-email" required />
+            </div>
+            <div class="form-group" id="teacher-group" style="display: none">
+              <label for="user-teacher">授课教师</label>
+              <input type="text" id="user-teacher" />
+            </div>
+            <div class="form-group" id="lesson-group" style="display: none">
+              <label for="user-lesson">课程名称</label>
+              <input type="text" id="user-lesson" />
+            </div>
+            <div class="form-group">
+              <label for="user-password">密码</label>
+              <input type="password" id="user-password" required />
+            </div>
+            <button type="submit" class="btn btn-primary">保存修改</button>
+          </form>
+        </div>
+
+        <!-- 学情检测区域（学生） -->
+        <div class="content-section" id="learning-section">
+          <h1>学情检测</h1>
+          <p>该功能正在开发中，敬请期待...</p>
+        </div>
+
+        <!-- 学生信息区域（教师） -->
+        <div class="content-section" id="students-section">
+          <h1>学生信息</h1>
+          <div class="filter-container">
+            <div class="form-group">
+              <label for="filter-lesson">课程名称</label>
+              <select id="filter-lesson">
+                <option value="">全部</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="filter-grade">年级</label>
+              <select id="filter-grade">
+                <option value="">全部</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="filter-teacher">授课教师</label>
+              <select id="filter-teacher">
+                <option value="">全部</option>
+              </select>
+            </div>
+            <button class="btn" onclick="filterStudents()">筛选</button>
+            <button class="btn" onclick="clearFilter()">清空</button>
+          </div>
+          <div id="students-table-container">
+            <table id="students-table">
+              <thead>
+                <tr>
+                  <th>学号</th>
+                  <th>姓名</th>
+                  <th>年级</th>
+                  <th>电话</th>
+                  <th>邮箱</th>
+                  <th>授课教师</th>
+                  <th>课程名称</th>
+                </tr>
+              </thead>
+              <tbody id="students-tbody">
+                <!-- 学生数据将通过JavaScript动态填充 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 教学建议区域（教师） -->
+        <div class="content-section" id="teaching-section">
+          <h1>教学建议</h1>
+          <p>该功能正在开发中，敬请期待...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面脚本 -->
+    <script>
+      let currentUser = null;
+
+      // 页面加载时检查登录状态
+      window.onload = async function () {
+        await checkLogin();
+        if (currentUser) {
+          initializeSidebar();
+          await loadUserProfile();
+        }
+      };
+
+      // 检查登录状态
+      async function checkLogin() {
+        try {
+          const userInfoStr = localStorage.getItem("userInfo");
+
+          const userInfo = document.getElementById("user-info");
+          const logoutLink = document.getElementById("logout-link");
+          const loginLink = document.getElementById("login-link");
+          const registerLink = document.getElementById("register-link");
+
+          if (userInfoStr) {
+            currentUser = JSON.parse(userInfoStr);
+            document.getElementById("username").textContent = currentUser.name;
+
+            userInfo.style.display = "block";
+            logoutLink.style.display = "block";
+            loginLink.style.display = "none";
+            registerLink.style.display = "none";
+          } else {
+            // 未登录,重定向到登录页
+            window.location.href = "./login.html";
+          }
+        } catch (error) {
+          console.error("检查登录状态失败:", error);
+          window.location.href = "./login.html";
+        }
+      }
+
+      // 退出功能
+      async function logout() {
+        localStorage.removeItem("userInfo");
+        window.location.href = "./index.html";
+      }
+
+      // 初始化侧边栏
+      function initializeSidebar() {
+        const sidebar = document.getElementById("sidebar");
+        sidebar.innerHTML = "";
+
+        // 个人信息标签（所有用户都有）
+        const profileTab = createSidebarItem("个人信息", "profile-section");
+        sidebar.appendChild(profileTab);
+
+        // 根据用户角色添加标签
+        if (currentUser.role === "本科生" || currentUser.role === "研究生") {
+          const learningTab = createSidebarItem(
+            "学情检测",
+            "learning-section"
+          );
+          sidebar.appendChild(learningTab);
+        } else if (currentUser.role === "教师") {
+          const studentsTab = createSidebarItem(
+            "学生信息",
+            "students-section"
+          );
+          const teachingTab = createSidebarItem(
+            "教学建议",
+            "teaching-section"
+          );
+          sidebar.appendChild(studentsTab);
+          sidebar.appendChild(teachingTab);
+        }
+      }
+
+      // 创建侧边栏项
+      function createSidebarItem(text, sectionId) {
+        const item = document.createElement("div");
+        item.className = "sidebar-item";
+        if (sectionId === "profile-section") {
+          item.classList.add("active");
+        }
+        item.textContent = text;
+        item.onclick = () => switchSection(sectionId);
+        return item;
+      }
+
+      // 切换内容区域
+      function switchSection(sectionId) {
+        // 更新侧边栏状态
+        document.querySelectorAll(".sidebar-item").forEach((item) => {
+          item.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // 更新内容区域
+        document.querySelectorAll(".content-section").forEach((section) => {
+          section.classList.remove("active");
+        });
+        document.getElementById(sectionId).classList.add("active");
+
+        // 如果切换到学生信息页,加载学生数据和筛选选项
+        if (sectionId === "students-section") {
+          loadFilterOptions();
+          loadStudents();
+        }
+      }
+
+      // 加载用户个人信息
+      async function loadUserProfile() {
+        try {
+          console.log("正在加载用户信息...");
+          console.log("当前用户:", currentUser);
+          console.log("用户ID:", currentUser.id);
+
+          const response = await fetch(
+            `http://127.0.0.1:5500/user-info?userId=${currentUser.id}`
+          );
+          const data = await response.json();
+
+          console.log("服务器返回数据:", data);
+
+          if (data.success) {
+            const user = data.userInfo;
+            console.log("用户信息:", user);
+
+            document.getElementById("user-id").value = user.id;
+            document.getElementById("user-name").value = user.name || "";
+            document.getElementById("user-phone").value = user.phone || "";
+            document.getElementById("user-email").value = user.email || "";
+            document.getElementById("user-password").value = user.password || "";
+
+            // 根据角色显示不同字段
+            if (currentUser.role === "本科生" || currentUser.role === "研究生") {
+              document.getElementById("grade-group").style.display = "block";
+              document.getElementById("teacher-group").style.display = "block";
+              document.getElementById("lesson-group").style.display = "block";
+              document.getElementById("user-grade").value = user.grade || "";
+              document.getElementById("user-teacher").value = user.teacher || "";
+              document.getElementById("user-lesson").value = user.lesson || "";
+            }
+
+            console.log("用户信息加载完成");
+          } else {
+            console.error("服务器返回错误:", data.message);
+            showMessage("profile-message", data.message || "加载用户信息失败", "error");
+          }
+        } catch (error) {
+          console.error("加载用户信息失败:", error);
+          showMessage("profile-message", "加载用户信息失败", "error");
+        }
+      }
+
+      // 提交个人信息修改
+      document
+        .getElementById("profile-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          // 显示确认弹窗
+          const confirmed = confirm("确定要保存修改吗？");
+          if (!confirmed) {
+            return; // 用户取消，不执行保存
+          }
+
+          const updatedInfo = {
+            userId: currentUser.id,
+            name: document.getElementById("user-name").value,
+            phone: document.getElementById("user-phone").value,
+            email: document.getElementById("user-email").value,
+            password: document.getElementById("user-password").value,
+          };
+
+          // 如果是学生,添加额外字段
+          if (currentUser.role === "本科生" || currentUser.role === "研究生") {
+            updatedInfo.grade = document.getElementById("user-grade").value;
+            updatedInfo.teacher = document.getElementById("user-teacher").value;
+            updatedInfo.lesson = document.getElementById("user-lesson").value;
+          }
+
+          try {
+            const response = await fetch(
+              "http://127.0.0.1:5500/update-user-info",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(updatedInfo),
+              }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+              showMessage("profile-message", "保存成功!", "success");
+              // 更新localStorage中的用户名
+              currentUser.name = updatedInfo.name;
+              localStorage.setItem("userInfo", JSON.stringify(currentUser));
+              document.getElementById("username").textContent = currentUser.name;
+            } else {
+              showMessage("profile-message", data.message, "error");
+            }
+          } catch (error) {
+            console.error("更新用户信息失败:", error);
+            showMessage("profile-message", "保存失败,请稍后重试", "error");
+          }
+        });
+
+      // 加载学生信息（教师功能）
+      async function loadStudents(filters = {}) {
+        try {
+          const queryParams = new URLSearchParams(filters);
+          const response = await fetch(
+            `http://127.0.0.1:5500/students?${queryParams}`
+          );
+          const data = await response.json();
+
+          if (data.success) {
+            displayStudents(data.students);
+          }
+        } catch (error) {
+          console.error("加载学生信息失败:", error);
+        }
+      }
+
+      // 显示学生信息
+      function displayStudents(students) {
+        const tbody = document.getElementById("students-tbody");
+        tbody.innerHTML = "";
+
+        if (students.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" style="text-align: center;">暂无数据</td></tr>';
+          return;
+        }
+
+        students.forEach((student) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${student.id}</td>
+            <td>${student.name}</td>
+            <td>${student.grade || "-"}</td>
+            <td>${student.phone || "-"}</td>
+            <td>${student.email || "-"}</td>
+            <td>${student.teacher || "-"}</td>
+            <td>${student.lesson || "-"}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+
+      // 加载筛选下拉菜单选项
+      async function loadFilterOptions() {
+        try {
+          // 加载课程名称选项
+          const lessonResponse = await fetch(
+            "http://127.0.0.1:5500/student-filter-options?field=lesson"
+          );
+          const lessonData = await lessonResponse.json();
+          if (lessonData.success) {
+            populateSelect("filter-lesson", lessonData.options);
+          }
+
+          // 加载年级选项
+          const gradeResponse = await fetch(
+            "http://127.0.0.1:5500/student-filter-options?field=grade"
+          );
+          const gradeData = await gradeResponse.json();
+          if (gradeData.success) {
+            populateSelect("filter-grade", gradeData.options);
+          }
+
+          // 加载授课教师选项
+          const teacherResponse = await fetch(
+            "http://127.0.0.1:5500/student-filter-options?field=teacher"
+          );
+          const teacherData = await teacherResponse.json();
+          if (teacherData.success) {
+            populateSelect("filter-teacher", teacherData.options);
+          }
+        } catch (error) {
+          console.error("加载筛选选项失败:", error);
+        }
+      }
+
+      // 填充下拉菜单选项
+      function populateSelect(selectId, options) {
+        const select = document.getElementById(selectId);
+        // 保留"全部"选项，移除其他选项
+        while (select.options.length > 1) {
+          select.remove(1);
+        }
+        // 添加新选项
+        options.forEach((option) => {
+          const optionElement = document.createElement("option");
+          optionElement.value = option;
+          optionElement.textContent = option;
+          select.appendChild(optionElement);
+        });
+      }
+
+      // 筛选学生
+      function filterStudents() {
+        const lesson = document.getElementById("filter-lesson").value;
+        const grade = document.getElementById("filter-grade").value;
+        const teacher = document.getElementById("filter-teacher").value;
+
+        const filters = {};
+        if (lesson) filters.lesson = lesson;
+        if (grade) filters.grade = grade;
+        if (teacher) filters.teacher = teacher;
+
+        loadStudents(filters);
+      }
+
+      // 清空筛选条件
+      function clearFilter() {
+        document.getElementById("filter-lesson").value = "";
+        document.getElementById("filter-grade").value = "";
+        document.getElementById("filter-teacher").value = "";
+        loadStudents();
+      }
+
+      // 显示消息
+      function showMessage(elementId, message, type) {
+        const messageEl = document.getElementById(elementId);
+        messageEl.textContent = message;
+        messageEl.className = `message ${type}`;
+        messageEl.style.display = "block";
+
+        setTimeout(() => {
+          messageEl.style.display = "none";
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>
