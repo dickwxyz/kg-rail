@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<!-- 页面：用户登录 -->
+<!-- 结构：左右双栏（登录表单 / 注册引导） -->
+<!-- 功能：前端校验、后端验证、保存用户信息、跳转首页 -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>用户登录</title>
+  </head>
+  <!-- 页面样式：布局容器、登录表单、注册引导、输入与按钮 -->
+  <style>
+    /* 布局容器与左右分栏 */
+    .all {
+      width: 800px;
+      box-shadow: -10px 10px 25px rgba(210, 210, 210, 0.9);
+      margin: auto;
+      margin-top: 5%;
+      display: flex;
+      border-radius: 35px;
+      background-color: #ffffff;
+      height: 550px;
+    }
+    .log {
+      width: 50%;
+      margin: auto;
+    }
+    .reg {
+      width: 50%;
+      height: 100%;
+      margin: auto;
+      background-color: #3f79dd;
+      border-radius: 35px;
+      color: #ffffff;
+    }
+    /* 注册引导板块 */
+    .reg_1 {
+      text-align: center;
+      margin: auto;
+      margin-top: 50%;
+    }
+    .reg_1 h2 {
+      font-weight: 700;
+    }
+    .reg_1 p {
+      margin: 15px 0px 25px 0px;
+    }
+    .sig {
+      width: 70px;
+      height: 30px;
+      border-radius: 12px;
+      background-color: #20b2aa;
+      border-color: #fff;
+      color: #ffffff;
+    }
+    #tiao {
+      padding: 0em 0;
+    }
+    .reg_1 a {
+      color: #ffffff;
+    }
+    /* 登录表单样式 */
+    h3 {
+      font-size: 3em;
+      color: black;
+      padding-bottom: 1em;
+      margin: 0;
+      text-align: center;
+      font-family: "Marvel-Regular";
+    }
+    .input {
+      margin: 10px 50px;
+      width: 300px;
+      height: 70px;
+    }
+    span {
+      color: #999;
+      font-size: 0.85em;
+      padding-bottom: 0.2em;
+      display: block;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .input-text {
+      border: 1px solid #555;
+      outline-color: #fd9f3e;
+      width: 90%;
+      font-size: 1em;
+      padding: 0.5em;
+      line-height: inherit;
+    }
+    .register-top-grid {
+      color: black;
+      padding-bottom: 1em;
+      margin: 0;
+      font-family: "Marvel-Regular";
+      margin: 10px 0;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .tijiao {
+      color: rgb(255, 253, 253);
+      width: 80px;
+      height: 35px;
+      background-color: rgb(241, 52, 10);
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+  <body>
+    <!-- 页面布局：左侧登录表单 / 右侧注册引导 -->
+    <div class="all">
+      <!-- 登录表单区域 -->
+      <div class="log">
+        <div class="register">
+          <form id="loginForm">
+            <div class="register-top-grid">
+              <h3>用户登录</h3>
+              <div class="input">
+                <span>学号/工号 <label style="color: red">* </label></span>
+                <input
+                  id="userId"
+                  type="text"
+                  v-model="name"
+                  placeholder="请输入学号/工号"
+                  class="input-text"
+                />
+              </div>
+              <div class="input">
+                <span>密码 <label style="color: red">*</label></span>
+                <input
+                  id="password"
+                  type="password"
+                  v-model="password"
+                  placeholder="请输入密码"
+                  class="input-text"
+                />
+              </div>
+            </div>
+            <div class="text-center">
+              <input type="submit" value="登录" class="tijiao" />
+            </div>
+          </form>
+        </div>
+      </div>
+      <!-- 注册引导区域 -->
+      <div class="reg">
+        <div class="reg_1">
+          <h2>没有账号？</h2>
+          <p>立即注册加入我们吧，和我们一起开启旅程吧</p>
+          <a href="./register.html">
+            <button type="primary" class="sig">注册</button>
+          </a>
+        </div>
+      </div>
+    </div>
+    <!-- 页面脚本：登录流程（校验→请求→本地存储→跳转） -->
+    <script>
+      // ========================================
+      // 登录表单提交处理逻辑
+      // ========================================
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", async function (event) {
+          // 阻止表单默认提交行为（防止页面刷新）
+          event.preventDefault();
+
+          // ========== 步骤1: 获取用户输入的登录信息 ==========
+          const userId = document.getElementById("userId").value.trim();
+          const password = document.getElementById("password").value;
+
+          try {
+            // ========== 步骤2: 前端基础校验 ==========
+            // 检查学号/工号和密码是否为空
+            if (!userId || !password) {
+              alert("请输入学号/工号和密码！");
+              return;
+            }
+
+            // 检查学号/工号格式是否正确
+            // 工号为4位数字，本科生学号为10位，研究生学号为9位
+            if (userId.length !== 4 && userId.length !== 9 && userId.length !== 10) {
+              alert("学号/工号格式不正确！\n- 工号为4位数字\n- 本科生学号为10位数字\n- 研究生学号为9位数字");
+              return;
+            }
+
+            // ========== 步骤3: 调用后端API验证用户身份 ==========
+            // *** 重要修复 ***: 发送POST请求到 /login 接口
+            // 后端会在user.db数据库中查询student或teacher表进行验证
+            const resp = await fetch("http://127.0.0.1:5500/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId, password }),
+            });
+
+            // ========== 步骤4: 解析后端返回的JSON数据 ==========
+            const data = await resp.json();
+
+            // ========== 步骤5: 验证登录结果 ==========
+            // 如果HTTP状态码不是200或后端返回success为false
+            // 说明账号或密码错误，数据库中没有匹配的记录
+            if (!resp.ok || !data.success) {
+              alert(data.message || "登录失败，请检查学号/工号或密码");
+              return;
+            }
+
+            // ========== 步骤6: 登录成功，保存用户信息到浏览器本地存储 ==========
+            // 后端返回的userInfo包含: userId, username, userType
+            // 保存到localStorage供其他页面（如index.html）读取使用
+            localStorage.setItem("userInfo", JSON.stringify(data.userInfo));
+            alert("登录成功！");
+
+            // ========== 步骤7: 跳转到首页 ==========
+            window.location.href = "./index.html";
+
+          } catch (error) {
+            // ========== 步骤8: 处理网络错误或服务器异常 ==========
+            console.error("登录请求错误:", error);
+            alert("登录失败，请检查网络连接或稍后重试！");
+          }
+        });
+    </script>
+  </body>
+</html>

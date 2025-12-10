@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<!-- 页面：用户注册 -->
+<!-- 结构：左右双栏（左侧登录引导 / 右侧注册表单） -->
+<!-- 功能：用户类型联动、前端校验、后端提交与结果处理 -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>用户注册</title>
+    <!-- 页面样式：布局容器、注册表单、登录引导、输入控件与按钮、交互状态 -->
+    <style>
+      .all {
+        width: 800px;
+        box-shadow: -10px 10px 25px rgba(210, 210, 210, 0.9);
+        margin: auto;
+        margin-top: 5%;
+        display: flex;
+        border-radius: 35px;
+        background-color: #ffffff;
+        height: 750px; /* 增加高度以适应更多内容 */
+      }
+      .log {
+        width: 50%;
+        margin: auto;
+      }
+      .reg {
+        width: 50%;
+        height: 100%;
+        margin: auto;
+        background-color: #3f79dd;
+        border-radius: 35px;
+        color: #ffffff;
+      }
+      .reg_1 {
+        text-align: center;
+        margin: auto;
+        margin-top: 50%;
+      }
+      .reg_1 h2 {
+        font-weight: 700;
+      }
+      .reg_1 p {
+        margin: 15px 0px 25px 0px;
+      }
+      .sig {
+        width: 70px;
+        height: 30px;
+        border-radius: 12px;
+        background-color: #20b2aa;
+        border-color: #fff;
+        color: #ffffff;
+      }
+      #tiao {
+        padding: 0em 0;
+      }
+      .reg_1 a {
+        color: #ffffff;
+      }
+      h3 {
+        font-size: 3em;
+        color: black;
+        padding-bottom: 1em;
+        margin: 0;
+        text-align: center;
+        font-family: "Marvel-Regular";
+      }
+      .input {
+        margin: 10px 50px;
+        width: 300px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+      }
+      .input-label {
+        width: 120px; /* 调整标签宽度 */
+        font-size: 0.9em;
+        color: #555;
+        margin-right: 10px; /* 增加标签和输入框之间的间距 */
+      }
+
+      .ll {
+        border: 1px solid #555;
+        outline-color: #fd9f3e;
+        width: 100%; /* 确保宽度为100% */
+        font-size: 1em;
+        padding: 0.5em;
+        line-height: inherit;
+        background: white;
+        border-radius: 4px; /* 添加圆角与其他输入框一致 */
+        box-sizing: border-box; /* 包含padding和border */
+      }
+
+      .select.ll {
+        padding-right: 30px; /* 为箭头留出空间 */
+        height: 38px; /* 与其他输入框高度一致 */
+      }
+
+      .register-top-grid {
+        color: black;
+        padding-bottom: 1em;
+        margin: 0;
+        font-family: "Marvel-Regular";
+        margin: 10px 0;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .zhuce {
+        border: none;
+        color: rgb(255, 253, 253);
+        width: 80px;
+        height: 35px;
+        background-color: rgb(241, 52, 10);
+        cursor: pointer;
+      }
+
+      .zhuce:hover {
+        background-color: rgb(200, 40, 10); /* 鼠标悬停效果 */
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 页面布局：左侧登录引导 / 右侧注册表单 -->
+    <div class="all">
+      <!-- 登录引导区域（已有账号） -->
+      <div class="reg">
+        <div class="reg_1">
+          <h2>已有账号？</h2>
+          <p>请使用你的账号进行登录！</p>
+          <a href="login.html">
+            <button type="button" class="sig">登录</button>
+          </a>
+        </div>
+      </div>
+      <!-- 注册表单区域 -->
+      <div class="log">
+        <div>
+          <div class="register" id="tiao">
+            <form id="registerForm">
+              <div class="register-top-grid">
+                <h3>注册新用户</h3>
+
+                <!-- 修改后的用户类型部分 -->
+                <div class="input">
+                  <label class="input-label"
+                    >用户类型 <span style="color: red">*</span></label
+                  >
+                  <select class="ll" id="userType" name="userType" required>
+                    <option value="" disabled selected>请选择您的身份</option>
+                    <option value="student">学生</option>
+                    <option value="teacher">教师</option>
+                  </select>
+                </div>
+
+                <div class="input">
+                  <label class="input-label"
+                    >学号/工号 <span style="color: red">*</span></label
+                  >
+                  <input
+                    class="ll"
+                    type="text"
+                    placeholder="请输入学号/工号"
+                    id="Id"
+                    required
+                  />
+                </div>
+                <div class="input">
+                  <label class="input-label"
+                    >姓名 <span style="color: red">*</span></label
+                  >
+                  <input
+                    class="ll"
+                    type="text"
+                    placeholder="请输入姓名"
+                    id="name"
+                    required
+                  />
+                </div>
+                <div class="input">
+                  <label class="input-label"
+                    >手机号 <span style="color: red">*</span></label
+                  >
+                  <input
+                    class="ll"
+                    type="text"
+                    placeholder="请输入手机号"
+                    id="phone"
+                    required
+                  />
+                </div>
+                <div class="input">
+                  <label class="input-label"
+                    >邮箱 <span style="color: red">*</span></label
+                  >
+                  <input
+                    class="ll"
+                    type="text"
+                    placeholder="请输入邮箱"
+                    id="email"
+                    required
+                  />
+                </div>
+
+                <div class="input">
+                  <label class="input-label"
+                    >密码 <span style="color: red">*</span></label
+                  >
+                  <input
+                    class="ll"
+                    type="password"
+                    placeholder="请输入密码"
+                    id="password"
+                    required
+                  />
+                </div>
+
+                <div class="input" id="teacherInput" style="display: none">
+                  <label class="input-label" 
+                    >任课教师 <span style="color: red">*</span></label
+                  >
+                  <select class="ll" id="teacherName" name="teacherName" required>
+                    <option value="" disabled selected>请选择您的任课教师</option>
+                    <option >钱晨</option>
+                    <option >许哲谱</option>
+                  </select>
+                </div>
+
+                <div class="input" id="lessonInput" style="display: none">
+                  <label class="input-label"
+                    >课程名称 <span style="color: red">*</span></label
+                  >
+                  <select class="ll" id="lessonName" name="lessonName" required>
+                    <option value="" disabled selected>请选择您的课程</option>
+                    <option >运营管理</option>
+                    <option >轨道仿真</option>
+                  </select>
+                </div>
+
+                <!-- 用户类型联动脚本：学生显示“任课教师/课程”，教师隐藏并移除必填 -->
+                <script>
+                  const userTypeSelect = document.getElementById("userType");
+                  const teacherInput = document.getElementById("teacherInput");
+                  const lessonInput = document.getElementById("lessonInput");
+
+                  // 页面加载时初始化
+                  document.addEventListener("DOMContentLoaded", function() {
+                    const teacherNameSelect = document.getElementById("teacherName");
+                    const lessonNameSelect = document.getElementById("lessonName");
+                    
+                    // 初始状态下移除required属性
+                    if(teacherNameSelect) teacherNameSelect.removeAttribute("required");
+                    if(lessonNameSelect) lessonNameSelect.removeAttribute("required");
+                  });
+
+                  // 监听用户类型选择变化
+                  userTypeSelect.addEventListener("change", function () {
+                    const selectedValue = userTypeSelect.value;
+                    const teacherNameSelect =
+                      document.getElementById("teacherName");
+                    const lessonNameSelect = 
+                    document.getElementById("lessonName");
+                    
+                    if (selectedValue === "teacher") {
+                      // 教师用户
+                      teacherInput.style.display = "none";
+                      lessonInput.style.display = "none";
+                      if(teacherNameSelect) {
+                        teacherNameSelect.removeAttribute("required");
+                        teacherNameSelect.selectedIndex = 0;
+                      }
+                      if(lessonNameSelect) {
+                        lessonNameSelect.removeAttribute("required");
+                        lessonNameSelect.selectedIndex = 0;
+                      }
+                    } else {
+                      // 学生用户
+                      teacherInput.style.display = "flex";
+                      lessonInput.style.display = "flex";
+                      if(teacherNameSelect) teacherNameSelect.setAttribute("required", "");
+                      if(lessonNameSelect) lessonNameSelect.setAttribute("required", "");
+                    }
+                  });
+                </script>
+
+                <div class="clearfix"></div>
+              </div>
+              <div class="text-center">
+                <input type="submit" value="注册" class="zhuce" />
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面脚本：注册流程（校验→构造数据→发送请求→处理响应） -->
+    <script>
+      const registerForm = document.getElementById("registerForm");
+
+      // 表单提交处理
+      registerForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        const userId = document.getElementById("Id").value;
+        const name = document.getElementById("name").value;
+        const phone = document.getElementById("phone").value;
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const userType = document.getElementById("userType").value;
+        const teacherName = document.getElementById("teacherName").value;
+        const lessonName = document.getElementById("lessonName").value;
+
+        let grade = "";
+
+        // 增强学号格式校验
+        if (userType === "teacher" && userId.length !== 4) {
+          alert("教师工号必须为4位！");
+          return;
+        } else if (
+          userType === "student" &&
+          userId.length !== 9 &&
+          userId.length !== 10
+        ) {
+          alert("学生学号必须为9或10位！");
+          return;
+        }
+
+        const formData = {
+          userId,
+          name,
+          phone,
+          email,
+          password,
+          userType,
+        };
+        // 仅当用户是学生时添加 teacherName
+        if (userType === "student") {
+          const teacherNameSelect = document.getElementById("teacherName");
+          const lessonNameSelect = document.getElementById("lessonName");
+          
+          formData.teacherName = teacherNameSelect ? teacherNameSelect.value : "";
+          formData.lessonName = lessonNameSelect ? lessonNameSelect.value : "";
+        
+
+          if (userId.length == 9){
+            grade = userId.substring(0, 2) + "级硕";
+            formData.grade = grade
+
+          }else {
+            grade = userId.substring(0, 2) + "级本";
+            formData.grade = grade;
+          }
+
+          console.log(
+          `${userId}, ${name}, ${grade}, ${phone}, ${email}, ${password}, ${userType}, ${teacherName}, ${lessonName}`
+        )
+          
+        }else{
+          console.log(
+          `${userId}, ${name}, ${phone}, ${email}, ${password}, ${userType}`
+        )
+        }
+        ;
+
+        fetch("http://127.0.0.1:5500/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            alert(data.success ? "注册成功！" : "注册失败: " + data.message);
+            if (data.success) window.location.href = "./login.html";
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("注册失败，请稍后重试。");
+          });
+      });
+    </script>
+  </body>
+</html>
