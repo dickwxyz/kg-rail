@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<!-- 页面：课程主页（城市轨道交通运营管理） -->
+<!-- 结构：导航栏 / 标题背景 / 页面内容（卡片分区） -->
+<!-- 功能：登录状态检查与退出 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>轨道交通运营管理课程</title>
+    <!-- 页面样式：全局重置、导航、标题背景、容器、卡片、响应式 -->
+    <style>
+      /* 全局样式重置 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      /* 新增标题背景样式 */
+      .header-banner {
+        background-image: url(./pic/header-bg.png); /* 背景图片路径 */
+        background-size: 100% auto; /* 放大背景图宽度 */
+        background-position: center 35%; /* 调整焦点位置 */
+        background-repeat: no-repeat;
+        padding: 350px 0px;
+        position: relative;
+        overflow: hidden; /* 隐藏溢出部分 */
+        margin: 0 auto; /* 新增自动外边距 */
+        /* 新增与导航栏对齐的尺寸控制 */
+        width: 100%;
+        max-width: 100vw; /* 与导航栏同宽 */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 保持与导航栏阴影一致 */
+      }
+
+      .header-banner::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.5); /* 半透明遮罩层 */
+        z-index: 1;
+      }
+      /* 新增容器包裹层 */
+      .header-wrapper {
+        position: relative;
+        width: 100%;
+        background: inherit; /* 继承背景 */
+      }
+      /* 优化文字显示 */
+      .header-banner h1 {
+        max-width: 800px; /* 控制标题最大宽度 */
+        margin: 0 auto; /* 保持居中 */
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2); /* 添加文字阴影 */
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.85); /* 半透明背景 */
+        border-radius: 8px;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f9f9f9;
+      }
+
+      /* 导航栏样式 */
+      nav {
+        background-color: #2c3e50;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: relative; /* 新增定位 */
+        z-index: 10; /* 新增层级 */
+      }
+
+      nav ul {
+        list-style-type: none;
+        display: flex;
+        margin: 0;
+        padding: 0;
+      }
+
+      nav ul li {
+        margin-right: 20px;
+        display: flex; /* 使用flex布局 */
+        align-items: center; /* 垂直居中对齐 */
+      }
+
+      nav ul li a {
+        color: white;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        transition: background-color 0.3s ease, color 0.3s ease;
+        display: inline-block; /* 确保链接也是块级元素 */
+        line-height: normal; /* 标准行高 */
+      }
+
+      nav ul li a:hover {
+        background-color: #34495e;
+        color: #f1c40f;
+      }
+
+      .nav-right {
+        margin-left: auto;
+      }
+
+      /* 原.container样式修改 */
+      .container {
+        padding: 40px 20px 20px; /* 调整顶部内边距 */
+        max-width: 1200px;
+        margin: auto;
+      }
+
+      /* 修改原h1样式 */
+      h1 {
+        font-size: 2.5rem;
+        color: #2c3e50;
+        margin-bottom: 40px;
+        text-align: center;
+        position: relative; /* 新增定位 */
+        z-index: 2; /* 确保文字在遮罩层上方 */
+      }
+
+      h2 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-size: 2rem;
+        border-bottom: 2px solid #f1c40f;
+        display: inline-block;
+        padding-bottom: 5px;
+      }
+
+      p,
+      ul {
+        margin-bottom: 20px;
+        color: #555;
+      }
+
+      ul {
+        padding-left: 20px;
+        list-style-type: disc;
+      }
+
+      .teacher-info {
+        display: flex;
+        align-items: center;
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      .teacher-info img {
+        border-radius: 50%;
+        width: 200px;
+        height: 200px;
+        margin-right: 20px;
+        border: 3px solid #f1c40f;
+      }
+
+      .user-info {
+        display: none; /* 默认隐藏用户信息 */
+      }
+
+      /* 确保用户信息也使用相同的垂直对齐 */
+.user-info a {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+      .user-info.active {
+        display: block; /* 登录后显示 */
+      }
+
+      .highlight {
+        color: #e67e22;
+        font-weight: bold;
+      }
+
+      /* 卡片式布局 */
+      .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 1200px) {
+        nav ul {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        nav ul li {
+          margin: 10px 0;
+        }
+
+        .teacher-info {
+          flex-direction: column;
+          text-align: center;
+        }
+
+        .teacher-info img {
+          margin-right: 0;
+          margin-bottom: 15px;
+        }
+        .header-banner {
+          padding: 40px 15px; /* 小屏幕内边距调整 */
+          background-position: 65% center; /* 背景图重点显示轨道部分 */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav>
+      <ul class="nav-left">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="./knowledge-graph.html">知识图谱</a></li>
+        <li><a href="./aiqa.html">AI问答</a></li>
+        <li><a href="./test.html">知识测试</a></li>
+        <li><a href="./resources.html">课程资源</a></li>
+        <!-- <li><a href="./discussion.html">互动讨论</a></li> 后续开发 -->
+      </ul>
+      <ul class="nav-right">
+        <li class="user-info" id="user-info">
+          <a href="#" id="user-link">欢迎，<span id="username"></span></a>
+        </li>
+
+        <li>
+          <a href="javascript:void(0)" onclick="logout()" id="logout-link">退出</a>
+        </li>
+        <li><a href="./login.html" id="login-link">登录</a></li>
+        <li><a href="./register.html" id="register-link">注册</a></li>
+      </ul>
+    </nav>
+
+    <!-- 新增包裹容器 -->
+    <div class="header-wrapper">
+      <!-- 新增标题背景容器 -->
+      <div class="header-banner">
+        <h1>欢迎学习《城市轨道交通运营管理》课程</h1>
+      </div>
+    </div>
+
+    <!-- 页面内容容器：课程简介 / 学习目标 / 课程大纲 / 教师信息 -->
+    <div class="container">
+      <!-- 课程简介 -->
+      <section id="course-introduction" class="card">
+        <p>
+          这是一个为交通运输专业本科生提供的课程学习平台。<br />
+          核心特色：知识图谱、AI问答、知识测试、学情评价。
+        </p>
+        <h2>课程简介</h2>
+        <p>
+          本课程旨在通过知识图谱构建学习资源，帮助学习者更系统地掌握轨道交通运营管理的知识。
+        </p>
+        <h2>课程信息</h2>
+        <ul>
+          <li>课程名称：城市轨道交通运营管理</li>
+          <li>课程类型：专业必修课</li>
+          <li>课程学分：3学分</li>
+          <li>课程学时：48学时</li>
+          <li>课程对象：大四学生</li>
+          <li>课程安排：每周两次，共12周</li>
+        </ul>
+        <h2>学习时长</h2>
+        <p>
+          本平台建议每周学习<span class="highlight">2小时</span
+          >，学习总时长为<span class="highlight">24小时</span>。
+        </p>
+      </section>
+
+      <!-- 学习目标 -->
+      <section id="learning-objectives" class="card">
+        <h2>学习目标</h2>
+        <ol>
+          <li>理解轨道交通运营管理的理论和技术发展概况</li>
+          <li>分析轨道运营管理系统和网络化运营设计的能力</li>
+          <li>评价运行服务设计方案的能力</li>
+          <li>运用计算机辅助设计和分析等现代设计方法</li>
+          <li>热爱本行业，崇高的职业荣誉感，团队协作能力，工程伦理</li>
+          <li>综合的创新意识、创新能力以及工程思维能力</li>
+        </ol>
+      </section>
+
+      <!-- 课程内容大纲 -->
+      <section id="course-outline" class="card">
+        <h2>课程内容大纲</h2>
+        <ul>
+          <li>第1章：绪论</li>
+          <li>第2章：城市轨道交通系统技术经济特征</li>
+          <li>第3章：列车运行和乘客出行的基本概念</li>
+          <li>第4章：客流特性分析和服务设计原理</li>
+          <li>第5章：运营计划编制技术</li>
+          <li>第6章：城市轨道交通系统运输能力理论及计算</li>
+          <li>第7章：能力加强技术与运营速度提高模式</li>
+          <li>第8章：城市轨道交通系统运营调度指挥技术</li>
+          <li>第9章：列车运行控制技术</li>
+          <li>第10章：车站管理与客流组织技术</li>
+          <li>第11章：城市轨道交通系统网络化运营组织技术</li>
+          <li>第12章：城市轨道交通票务管理</li>
+          <li>第13章：城市轨道交通运营设备维修管理</li>
+          <li>第14章：城市轨道交通运营安全管理</li>
+          <li>第15章：城市轨道交通企业运营组织机构与管理模式</li>
+          <li>第16章：城市轨道交通政策和经营模式</li>
+        </ul>
+      </section>
+
+      <!-- 教师信息 -->
+      <section id="teacher-info" class="card">
+        <h2>教师信息</h2>
+        <div class="teacher-info">
+          <img src="./pic/teacher-image.png" alt="教师头像" />
+          <div>
+            <p><strong>钱晨</strong></p>
+            <p>博士，讲师，上海应用技术大学轨道交通学院</p>
+            <p><strong>研究方向：</strong></p>
+            <ol>
+              <li>轨道交通运营管理</li>
+              <li>大模型应用</li>
+              <li>交通大数据挖掘</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- 页面脚本：登录状态检查与退出 -->
+      <script>
+        // 检查登录状态
+        async function checkLogin() {
+          
+          try {
+            // 从localStorage获取用户信息
+            const userInfoStr = localStorage.getItem("userInfo");
+
+            const userInfo = document.getElementById("user-info");
+            const logoutLink = document.getElementById("logout-link");
+            const loginLink = document.getElementById("login-link");
+            const registerLink = document.getElementById("register-link");
+
+            if (userInfoStr) {
+              // 解析用户信息
+              const user = JSON.parse(userInfoStr);
+
+              // 显示用户信息
+              document.getElementById("username").textContent = user.name;
+
+              // 更新UI显示状态
+              userInfo.style.display = "block";
+              logoutLink.style.display = "block";
+              loginLink.style.display = "none";
+              registerLink.style.display = "none";
+            } else {
+              // 用户未登录
+              userInfo.style.display = "none";
+              logoutLink.style.display = "none";
+              loginLink.style.display = "block";
+              registerLink.style.display = "block";
+            }
+          } catch (error) {
+            console.error("检查登录状态失败:", error);
+          }
+        }
+
+        // 退出功能
+        async function logout() {
+          // 从localStorage中移除用户信息
+          localStorage.removeItem("userInfo");
+
+          // 刷新页面或重定向到登录页
+          window.location.reload();
+        }
+
+        // 页面加载时检查登录状态
+        window.onload = checkLogin;
+      </script>
+    </div>
+  </body>
+</html>
