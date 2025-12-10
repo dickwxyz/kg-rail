@@ -146,6 +146,136 @@ function handleLogin(tableName, idColumn, userId, password, userType, res) {
   });
 }
 
+// 获取用户信息接口
+app.get('/user-info', (req, res) => {
+  const { userId } = req.query;
+
+  if (!userId) {
+    return res.status(400).json({ success: false, message: '用户ID不能为空！' });
+  }
+
+  // 根据ID长度判断用户类型
+  const idLength = userId.length;
+  let tableName = '';
+
+  if (idLength === 4) {
+    tableName = 'teacher';
+  } else if (idLength === 10 || idLength === 9) {
+    tableName = 'student';
+  } else {
+    return res.status(400).json({ success: false, message: '用户ID格式不正确！' });
+  }
+
+  db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [userId], (err, row) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: '数据库查询失败！' });
+    }
+
+    if (!row) {
+      return res.status(404).json({ success: false, message: '用户不存在！' });
+    }
+
+    return res.status(200).json({ success: true, userInfo: row });
+  });
+});
+
+// 更新用户信息接口
+app.post('/update-user-info', (req, res) => {
+  const { userId, name, phone, email, password, grade, teacher, lesson } = req.body;
+
+  if (!userId || !name || !phone || !email || !password) {
+    return res.status(400).json({ success: false, message: '必填字段不能为空！' });
+  }
+
+  // 根据ID长度判断用户类型
+  const idLength = userId.length;
+  let tableName = '';
+  let sql = '';
+  let params = [];
+
+  if (idLength === 4) {
+    tableName = 'teacher';
+    sql = `UPDATE ${tableName} SET name = ?, phone = ?, email = ?, password = ? WHERE id = ?`;
+    params = [name, phone, email, password, userId];
+  } else if (idLength === 10 || idLength === 9) {
+    tableName = 'student';
+    sql = `UPDATE ${tableName} SET name = ?, phone = ?, email = ?, password = ?, grade = ?, teacher = ?, lesson = ? WHERE id = ?`;
+    params = [name, phone, email, password, grade, teacher, lesson, userId];
+  } else {
+    return res.status(400).json({ success: false, message: '用户ID格式不正确！' });
+  }
+
+  db.run(sql, params, function(err) {
+    if (err) {
+      console.error('更新用户信息失败:', err.message);
+      return res.status(500).json({ success: false, message: '更新失败！' });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, message: '用户不存在！' });
+    }
+
+    return res.status(200).json({ success: true, message: '更新成功！' });
+  });
+});
+
+// 获取学生信息接口（教师功能）
+app.get('/students', (req, res) => {
+  const { lesson, grade, teacher } = req.query;
+
+  let sql = 'SELECT id, name, grade, phone, email, teacher, lesson FROM student WHERE 1=1';
+  const params = [];
+
+  // 根据筛选条件构建查询
+  if (lesson) {
+    sql += ' AND lesson = ?';
+    params.push(lesson);
+  }
+
+  if (grade) {
+    sql += ' AND grade = ?';
+    params.push(grade);
+  }
+
+  if (teacher) {
+    sql += ' AND teacher = ?';
+    params.push(teacher);
+  }
+
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('查询学生信息失败:', err.message);
+      return res.status(500).json({ success: false, message: '查询失败！' });
+    }
+
+    return res.status(200).json({ success: true, students: rows || [] });
+  });
+});
+
+// 获取学生表字段去重值接口（用于筛选下拉菜单）
+app.get('/student-filter-options', (req, res) => {
+  const { field } = req.query;
+
+  // 只允许查询特定字段
+  const allowedFields = ['lesson', 'grade', 'teacher'];
+  if (!field || !allowedFields.includes(field)) {
+    return res.status(400).json({ success: false, message: '无效的字段名！' });
+  }
+
+  const sql = `SELECT DISTINCT ${field} FROM student WHERE ${field} IS NOT NULL AND ${field} != '' ORDER BY ${field}`;
+
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('查询字段选项失败:', err.message);
+      return res.status(500).json({ success: false, message: '查询失败！' });
+    }
+
+    // 提取字段值到数组
+    const options = rows.map(row => row[field]);
+    return res.status(200).json({ success: true, options });
+  });
+});
+
 // 启动服务：监听本地端口
 app.listen(port, () => {
   console.log(`服务器运行在 http://127.0.0.1:${port}`);
