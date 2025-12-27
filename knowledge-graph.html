@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<!-- 页面：知识图谱（城市轨道交通运营管理） -->
+<!-- 结构：导航栏 / Neo4j知识图谱可视化区域 -->
+<!-- 功能：显示Neo4j知识图谱，支持搜索和交互功能 -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>知识图谱</title>
+    <!-- 1. 先引入 vis.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+    <!-- 引入 Neo4j Driver（用于测试连接与neovis.js连接） -->
+    <script src="https://unpkg.com/neo4j-driver@4.4.5/lib/browser/neo4j-web.min.js"></script>
+    <!-- 引入 neovis.js（浏览器打包版） -->
+    <script src="https://unpkg.com/neovis.js@2.0.2"></script>
+    <!-- 页面样式：全局重置、导航、图谱容器 -->
+    <style>
+      /* 全局样式重置 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f9f9f9;
+        overflow: hidden; /* 防止页面滚动 */
+      }
+
+      /* 导航栏样式 */
+      nav {
+        background-color: #2c3e50;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 10;
+      }
+
+      nav ul {
+        list-style-type: none;
+        display: flex;
+        margin: 0;
+        padding: 0;
+      }
+
+      nav ul li {
+        margin-right: 20px;
+        display: flex;
+        align-items: center;
+      }
+
+      nav ul li a {
+        color: white;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        transition: background-color 0.3s ease, color 0.3s ease;
+        display: inline-block;
+        line-height: normal;
+      }
+
+      nav ul li a:hover {
+        background-color: #34495e;
+        color: #f1c40f;
+      }
+
+      .nav-right {
+        margin-left: auto;
+      }
+
+      .user-info {
+        display: none; /* 默认隐藏用户信息 */
+      }
+
+      .user-info a {
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      .user-info.active {
+        display: block;
+      }
+
+      /* 搜索区域样式 */
+      .search-container {
+        position: absolute;
+        top: 80px;
+        left: 20px;
+        z-index: 5;
+        background: white;
+        border-radius: 4px;
+        padding: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 300px;
+      }
+
+      .search-container input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 100%;
+      }
+
+      .search-container button {
+        background-color: #2c3e50;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .search-container button:hover {
+        background-color: #34495e;
+      }
+
+      /* Cypher查询区域 */
+      .cypher-query-container {
+        margin-top: 10px;
+        width: 100%;
+      }
+
+      .cypher-query-container textarea {
+        width: 100%;
+        height: 80px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: monospace;
+        margin-bottom: 10px;
+        resize: vertical;
+      }
+
+      /* 连接配置区域 */
+      .connection-container {
+        margin-top: 10px;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+      }
+
+      .connection-container h3 {
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: #555;
+      }
+
+      .connection-container label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 12px;
+      }
+
+      .connection-container input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 100%;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+
+      /* 离线模式切换 */
+      .offline-mode {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .offline-mode label {
+        font-size: 12px;
+        margin-bottom: 0;
+      }
+
+      .layout-container {
+        margin-top: 10px;
+      }
+
+      .layout-container select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+
+      .legend-container {
+        margin-top: 10px;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+        font-size: 12px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 12px;
+      }
+
+      .legend-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+        border: 1px solid #ccc;
+      }
+
+      /* 状态信息 */
+      .status-message {
+        margin-top: 10px;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        display: none;
+      }
+
+      .status-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .status-error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .status-warning {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
+      }
+
+      /* 图谱容器 - 占满导航栏下的所有空间 */
+      #knowledge-graph-container {
+        position: absolute;
+        top: 54px; /* 导航栏高度 */
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #f9f9f9;
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 1200px) {
+        nav ul {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        nav ul li {
+          margin: 10px 0;
+        }
+
+        .search-container {
+          width: calc(100% - 40px);
+          top: 60px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav>
+      <ul class="nav-left">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="./knowledge-graph.html">知识图谱</a></li>
+        <li><a href="./aiqa.html">AI问答</a></li>
+        <li><a href="./test.html">知识测试</a></li>
+        <li><a href="./resources.html">课程资源</a></li>
+      </ul>
+      <ul class="nav-right">
+        <li class="user-info" id="user-info">
+          <a href="./user-center.html" id="user-link">欢迎，<span id="username"></span></a>
+        </li>
+        <li>
+          <a href="javascript:void(0)" onclick="logout()" id="logout-link">退出</a>
+        </li>
+        <li><a href="./login.html" id="login-link">登录</a></li>
+        <li><a href="./register.html" id="register-link">注册</a></li>
+      </ul>
+    </nav>
+
+    <!-- 搜索区域和Cypher查询区域 -->
+    <div class="search-container">
+      <!-- 搜索区域 -->
+      <input type="text" id="search-node" placeholder="搜索知识节点..." />
+      <button id="search-button">搜索</button>
+
+      <!-- Cypher查询区域 -->
+      <div class="cypher-query-container">
+        <textarea id="cypher-query" placeholder="输入Cypher查询语句，例如: MATCH (n:Chapter) RETURN n LIMIT 25">MATCH (n)-[r]->(m) RETURN n, r, m</textarea>
+        <button id="execute-query">执行查询</button>
+      </div>
+
+      <!-- 连接配置区域 -->
+      <div class="connection-container">
+        <h3>Neo4j连接设置</h3>
+        <label for="neo4j-url">服务器地址</label>
+        <input type="text" id="neo4j-url" value="bolt://localhost:7687" />
+        <label for="neo4j-user">用户名</label>
+        <input type="text" id="neo4j-user" value="neo4j" />
+        <label for="neo4j-password">密码</label>
+        <input type="password" id="neo4j-password" value="asdfghjkl" />
+
+        <div class="offline-mode">
+          <input type="checkbox" id="offline-mode" />
+          <label for="offline-mode">使用离线模式（不连接Neo4j）</label>
+        </div>
+
+        <button id="connect-button">连接/重新连接</button>
+        <button id="test-connection-button" type="button">测试连接</button>
+      </div>
+
+      <div class="layout-container">
+        <label for="layout-select">布局</label>
+        <select id="layout-select">
+          <option value="hierarchical">层次结构</option>
+          <option value="forceAtlas2">力导向(ForceAtlas2)</option>
+          <option value="barnesHut">Barnes-Hut</option>
+          <option value="repulsion" selected>排斥布局</option>
+          <option value="none">无物理(静态)</option>
+        </select>
+      </div>
+
+      <!-- 状态信息 -->
+      <div id="status-message" class="status-message"></div>
+
+      <div class="legend-container">
+        <!-- 节点类型图例 -->
+        <div><span class="legend-dot" style="background:#97c2fc"></span>Chapter</div>
+        <div><span class="legend-dot" style="background:#fb7e81"></span>Concept</div>
+        <div><span class="legend-dot" style="background:#7be141"></span>Technique</div>
+        <div><span class="legend-dot" style="background:#ffff00"></span>Theory</div>
+
+        <!-- 关系图例 - 使用箭头线表示关系 -->
+        <div style="grid-column: span 2; border-top: 1px solid #eee; padding-top: 6px; margin-top: 4px;">
+          <div style="display: flex; align-items: center; margin-bottom: 4px;">
+            <svg height="2" width="20" style="margin-right: 8px;">
+              <line x1="0" y1="0" x2="15" y2="0" style="stroke:#999999; stroke-width:2;" />
+              <polygon points="15,0 12,-3 12,3" style="fill:#999999;" />
+            </svg>
+            <span>关系 (显示为带箭头的灰色线)</span>
+          </div>
+          <div style="font-size: 11px; color: #666;">关系名称显示在连线中间</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 知识图谱容器 - 占满整个屏幕 -->
+    <div id="knowledge-graph-container"></div>
+
+    <!-- 页面脚本 -->
+    <script>
+      // 检查登录状态
+      async function checkLogin() {
+        try {
+          // 从localStorage获取用户信息
+          const userInfoStr = localStorage.getItem("userInfo");
+
+          const userInfo = document.getElementById("user-info");
+          const logoutLink = document.getElementById("logout-link");
+          const loginLink = document.getElementById("login-link");
+          const registerLink = document.getElementById("register-link");
+
+          if (userInfoStr) {
+            // 解析用户信息
+            const user = JSON.parse(userInfoStr);
+
+            // 显示用户信息
+            document.getElementById("username").textContent = user.name;
+
+            // 更新UI显示状态
+            userInfo.style.display = "block";
+            logoutLink.style.display = "block";
+            loginLink.style.display = "none";
+            registerLink.style.display = "none";
+          } else {
+            // 用户未登录
+            userInfo.style.display = "none";
+            logoutLink.style.display = "none";
+            loginLink.style.display = "block";
+            registerLink.style.display = "block";
+          }
+        } catch (error) {
+          console.error("检查登录状态失败:", error);
+        }
+      }
+
+      // 退出功能
+      async function logout() {
+        // 从localStorage中移除用户信息
+        localStorage.removeItem("userInfo");
+
+        // 刷新页面或重定向到登录页
+        window.location.reload();
+      }
+
+      let viz = null;
+      let offlineNetwork = null;
+      let isConnected = false;
+      let isOfflineMode = false;
+      let physicsFrozen = false;
+
+      function getCurrentNetwork() {
+        if (viz && (viz.network || viz._network)) {
+          return viz.network || viz._network;
+        }
+        if (offlineNetwork) return offlineNetwork;
+        return null;
+      }
+
+      function setNetworkTitles(network) {
+        if (!network || !network.body || !network.body.data) return;
+        try {
+          const nodeDs = network.body.data.nodes;
+          const edgeDs = network.body.data.edges;
+          const nodes = nodeDs.get();
+          const edges = edgeDs.get();
+
+          // 更新节点标题
+          nodeDs.update(nodes.map(n => ({
+            id: n.id,
+            title: [n.label, n.group].filter(Boolean).join(" / ")
+          })));
+
+          // 获取所有可能的关系类型
+          const relationshipTypes = new Set();
+          let debugOutput = "";
+
+          // 遍历每条边，尝试提取关系类型
+          edges.forEach(edge => {
+            // 深度检查边的数据结构
+            debugOutput += `\n边ID: ${edge.id}, 数据: ${JSON.stringify(edge).substring(0, 100)}...`;
+
+            // 使用增强的getRelationshipType函数获取关系类型
+            const relType = getRelationshipType(edge);
+            if (relType && relType !== "关系") {
+              relationshipTypes.add(relType);
+              debugOutput += `\n  - 提取到关系类型: ${relType}`;
+            } else {
+              debugOutput += "\n  - 未能提取到有效关系类型";
+              // 输出更多调试信息
+              if (edge.p) {
+                debugOutput += `\n  - 包含p属性: ${JSON.stringify(edge.p).substring(0, 100)}...`;
+              }
+              if (edge.relationship) {
+                debugOutput += `\n  - 包含relationship属性: ${JSON.stringify(edge.relationship).substring(0, 100)}...`;
+              }
+            }
+          });
+
+          // 输出调试信息到控制台
+          console.log("关系类型解析详情:", debugOutput);
+          console.log("发现的关系类型:", Array.from(relationshipTypes));
+
+          // 更新边的样式和标签
+          edgeDs.update(edges.map(e => {
+            // 获取关系类型
+            const relType = getRelationshipType(e);
+
+            // 记录每条边的处理结果
+            console.log(`边 ${e.id} 的关系类型: ${relType}`);
+
+            return {
+              id: e.id,
+              // 确保标签显示在边的中间
+              label: relType || "",
+              title: relType || "关系",
+              // 存储原始关系类型，以便后续处理
+              originalType: relType,
+              // 统一应用灰色样式
+              color: "#999999",
+              width: 1.5,
+              arrows: {
+                to: { enabled: true, scaleFactor: 1.2 }
+              },
+              font: {
+                align: "middle",
+                size: 14,
+                color: "#333",
+                background: "rgba(255,255,255,0.85)"
+              }
+            };
+          }));
+
+          // 将发现的关系类型添加到全局集合中
+          if (relationshipTypes.size > 0) {
+            Array.from(relationshipTypes).forEach(type => {
+              if (type && type !== "关系" && !discoveredRelationshipTypes.has(type)) {
+                discoveredRelationshipTypes.add(type);
+                console.log(`添加新的关系类型到全局集合: ${type}`);
+              }
+            });
+          }
+        } catch (error) {
+          console.error("设置网络标题时出错:", error, error.stack);
+        }
+      }
+
+      // 辅助函数：从边数据中提取关系类型
+      function getRelationshipType(edge) {
+        // 调试日志 - 查看传入的边数据结构
+        console.log("正在解析边数据:", JSON.stringify(edge).substring(0, 200) + "...");
+
+        try {
+          // 检查Neo4j返回的深层嵌套数据结构：p.segments[].relationship.type
+          if (edge.p && edge.p.segments && Array.isArray(edge.p.segments)) {
+            for (const segment of edge.p.segments) {
+              if (segment.relationship && segment.relationship.type) {
+                console.log("从p.segments中找到关系类型:", segment.relationship.type);
+                return segment.relationship.type;
+              }
+            }
+          }
+
+          // 检查直接的relationship对象
+          if (edge.relationship && edge.relationship.type) {
+            console.log("从relationship中找到关系类型:", edge.relationship.type);
+            return edge.relationship.type;
+          }
+
+          // 优先级：type 属性 > label 属性 > title 属性 > 回退到默认值
+          if (edge.type && typeof edge.type === "string" && edge.type.trim()) {
+            return edge.type.trim();
+          }
+
+          // 检查嵌套在properties中的type
+          if (edge.properties && edge.properties.type && typeof edge.properties.type === "string" && edge.properties.type.trim()) {
+            return edge.properties.type.trim();
+          }
+
+          // 检查Neo4j特有的labels属性
+          if (edge.labels && Array.isArray(edge.labels) && edge.labels.length > 0) {
+            return edge.labels[0];
+          }
+
+          // 其他可能的属性位置
+          if (edge.label && typeof edge.label === "string" && edge.label.trim()) {
+            return edge.label.trim();
+          }
+
+          if (edge.title && typeof edge.title === "string" && edge.title.trim()) {
+            return edge.title.trim();
+          }
+
+          // 无法确定关系类型时的默认值
+          return "关系";
+        } catch (error) {
+          console.error("解析关系类型时出错:", error);
+          return "关系";
+        }
+      }
+
+      function applyLayoutPreset(preset) {
+        const network = getCurrentNetwork();
+        if (!network) return;
+        physicsFrozen = false;
+        let options = {};
+        if (preset === "hierarchical") {
+          options = {
+            layout: {
+              hierarchical: {
+                enabled: true,
+                direction: "LR",
+                sortMethod: "hubsize",
+                nodeSpacing: 120,
+                levelSeparation: 180
+              }
+            },
+            physics: {
+              enabled: true,
+              solver: "hierarchicalRepulsion",
+              hierarchicalRepulsion: {
+                nodeDistance: 170,
+                springLength: 120,
+                springConstant: 0.01,
+                damping: 0.9
+              },
+              minVelocity: 0.75,
+              stabilization: {
+                enabled: true,
+                iterations: 300,
+                updateInterval: 50
+              }
+            }
+          };
+        } else if (preset === "forceAtlas2") {
+          options = {
+            layout: { hierarchical: { enabled: false } },
+            physics: {
+              enabled: true,
+              solver: "forceAtlas2Based",
+              forceAtlas2Based: {
+                gravitationalConstant: -80,
+                centralGravity: 0.2,
+                springLength: 130,
+                springConstant: 0.05,
+                damping: 0.9,
+                avoidOverlap: 1
+              },
+              minVelocity: 0.75,
+              stabilization: {
+                enabled: true,
+                iterations: 800,
+                updateInterval: 100
+              }
+            }
+          };
+        } else if (preset === "barnesHut") {
+          options = {
+            layout: { hierarchical: { enabled: false } },
+            physics: {
+              enabled: true,
+              solver: "barnesHut",
+              barnesHut: {
+                gravitationalConstant: -2000,
+                centralGravity: 0.3,
+                springLength: 150,
+                springConstant: 0.05,
+                damping: 0.9,
+                avoidOverlap: 1
+              },
+              minVelocity: 0.75,
+              stabilization: {
+                enabled: true,
+                iterations: 600,
+                updateInterval: 80
+              }
+            }
+          };
+        } else if (preset === "repulsion") {
+          options = {
+            layout: { hierarchical: { enabled: false } },
+            physics: {
+              enabled: true,
+              solver: "repulsion",
+              repulsion: {
+                nodeDistance: 300,
+                springLength: 240,
+                springConstant: 0.05,
+                damping: 0.9
+              },
+              minVelocity: 0.7,
+              stabilization: {
+                enabled: true,
+                iterations: 500,
+                updateInterval: 80
+              }
+            }
+          };
+        } else if (preset === "none") {
+          options = {
+            layout: { hierarchical: { enabled: false } },
+            physics: { enabled: false, stabilization: false }
+          };
+        }
+        try {
+          network.setOptions(options);
+        } catch (_) {}
+        setPhysicsAutoFreeze(network, { enable: true });
+        setNetworkTitles(network);
+      }
+      function setPhysicsAutoFreeze(network, { enable = true, stabilizeIterations = 800, maxWaitMs = 2000 } = {}) {
+        if (physicsFrozen) {
+          if (!network) {
+            if (viz && (viz.network || viz._network)) {
+              network = viz.network || viz._network;
+            } else if (offlineNetwork) {
+              network = offlineNetwork;
+            }
+          }
+          if (!network) return;
+          try {
+            network.setOptions({ physics: { enabled: false, stabilization: false } });
+          } catch (_) {}
+          return;
+        }
+
+        if (!network) {
+          if (viz && (viz.network || viz._network)) {
+            network = viz.network || viz._network;
+          } else if (offlineNetwork) {
+            network = offlineNetwork;
+          }
+        }
+
+        if (!network) return;
+        
+        const freeze = function() {
+          physicsFrozen = true;
+          try {
+            if (typeof network.stopSimulation === "function") network.stopSimulation();
+          } catch (_) {}
+          try {
+            network.setOptions({ physics: { enabled: false, stabilization: false } });
+          } catch (_) {}
+        };
+
+        if (enable) {
+          try {
+            network.setOptions({ physics: { enabled: true } });
+          } catch (_) {}
+          try {
+            network.stabilize(stabilizeIterations);
+          } catch (_) {}
+          try {
+            window.setTimeout(freeze, Math.max(500, maxWaitMs));
+          } catch (_) {}
+        }
+
+        try {
+          network.once("stabilizationIterationsDone", freeze);
+        } catch (_) {}
+
+        try {
+          network.once("stabilized", freeze);
+        } catch (_) {}
+      }
+
+      function formatNeo4jError(err) {
+        if (!err) return "未知错误";
+        const message = err.message ? String(err.message) : String(err);
+        const code = err.code ? String(err.code) : "";
+        return code ? `${message} (${code})` : message;
+      }
+
+      // 显示状态信息
+      function showStatus(message, type) {
+        const statusElement = document.getElementById('status-message');
+        statusElement.textContent = message;
+        statusElement.style.display = 'block';
+
+        // 移除所有类
+        statusElement.classList.remove('status-success', 'status-error', 'status-warning');
+
+        // 添加对应类型的类
+        if (type === 'success') {
+          statusElement.classList.add('status-success');
+        } else if (type === 'error') {
+          statusElement.classList.add('status-error');
+        } else if (type === 'warning') {
+          statusElement.classList.add('status-warning');
+        }
+
+        // 5秒后自动隐藏（除非是错误消息）
+        if (type !== 'error') {
+          setTimeout(() => {
+            statusElement.style.display = 'none';
+          }, 5000);
+        }
+      }
+
+      async function testNeo4jConnection() {
+        const serverUrl = document.getElementById('neo4j-url').value;
+        const serverUser = document.getElementById('neo4j-user').value;
+        const serverPassword = document.getElementById('neo4j-password').value;
+        isOfflineMode = document.getElementById('offline-mode').checked;
+
+        saveConnectionConfig();
+
+        if (isOfflineMode) {
+          showStatus("离线模式下无需测试连接", "warning");
+          return;
+        }
+
+        if (!window.neo4j) {
+          showStatus("Neo4j Driver 未加载，无法测试连接", "error");
+          return;
+        }
+
+        showStatus("正在测试 Neo4j 连接...", "warning");
+
+        let driver;
+        try {
+          driver = neo4j.driver(serverUrl, neo4j.auth.basic(serverUser, serverPassword));
+          await driver.verifyConnectivity();
+
+          const session = driver.session();
+          try {
+            const result = await session.run(
+              "CALL dbms.components() YIELD name, versions, edition RETURN name, versions[0] AS version, edition LIMIT 1"
+            );
+            const record = result.records[0];
+            const name = record ? record.get("name") : "Neo4j";
+            const version = record ? record.get("version") : "";
+            const edition = record ? record.get("edition") : "";
+            const details = [name, version, edition ? `(${edition})` : ""].filter(Boolean).join(" ");
+            showStatus(`连接成功：${details}`, "success");
+          } finally {
+            await session.close();
+          }
+        } catch (err) {
+          showStatus("连接失败：" + formatNeo4jError(err), "error");
+        } finally {
+          if (driver) {
+            try {
+              await driver.close();
+            } catch (_) {}
+          }
+        }
+      }
+
+      // 从localStorage保存/加载连接配置
+      function saveConnectionConfig() {
+        const config = {
+          url: document.getElementById('neo4j-url').value,
+          user: document.getElementById('neo4j-user').value,
+          password: document.getElementById('neo4j-password').value,
+          offlineMode: document.getElementById('offline-mode').checked
+        };
+
+        localStorage.setItem('neo4jConfig', JSON.stringify(config));
+      }
+
+      function loadConnectionConfig() {
+        try {
+          const configStr = localStorage.getItem('neo4jConfig');
+          if (configStr) {
+            const config = JSON.parse(configStr);
+            document.getElementById('neo4j-url').value = config.url || 'bolt://localhost:7687';
+            document.getElementById('neo4j-user').value = config.user || 'neo4j';
+            document.getElementById('neo4j-password').value = config.password || 'asdfghjkl';
+            document.getElementById('offline-mode').checked = config.offlineMode || false;
+            isOfflineMode = config.offlineMode || false;
+          }
+        } catch (error) {
+          console.error("加载连接配置失败:", error);
+        }
+      }
+
+      // 离线模式下的默认模拟数据（作为备用）
+        const defaultOfflineData = {
+          nodes: [
+          { id: "1", labels: ["Chapter"], properties: { name: "绪论", chapterNumber: 1 } },
+          { id: "2", labels: ["Chapter"], properties: { name: "城市轨道交通系统技术经济特征", chapterNumber: 2 } },
+          { id: "3", labels: ["Chapter"], properties: { name: "列车运行和乘客出行的基本概念", chapterNumber: 3 } },
+          { id: "101", labels: ["Concept"], properties: { name: "轨道交通特点" } },
+          { id: "102", labels: ["Concept"], properties: { name: "运能指标" } },
+          { id: "201", labels: ["Technique"], properties: { name: "能力计算方法" } },
+          { id: "301", labels: ["Theory"], properties: { name: "追踪间隔理论" } }
+          ],
+          edges: [
+          { id: "e1", from: "1", to: "2", type: "研究", properties: {} },
+          { id: "e2", from: "2", to: "3", type: "具有", properties: {} },
+          { id: "e3", from: "2", to: "101", type: "包含", properties: {} },
+          { id: "e4", from: "3", to: "102", type: "包含", properties: {} },
+          { id: "e5", from: "101", to: "201", type: "关联", properties: {} },
+          { id: "e6", from: "201", to: "301", type: "依据", properties: {} }
+          ]
+        };
+
+        // 实际使用的离线数据，将在加载JSON文件后赋值
+        let offlineData = defaultOfflineData;
+
+        // 从JSON文件加载Neo4j数据
+        async function loadNeo4jDataFromJson() {
+          const jsonFilePath = "./data/neo4j_query_table_data_2025-12-27.json";
+          showStatus(`正在加载数据文件: ${jsonFilePath}...`, "warning");
+
+          try {
+            const response = await fetch(jsonFilePath);
+            if (!response.ok) {
+              throw new Error(`无法加载数据文件 (${response.status} ${response.statusText})`);
+            }
+
+            const jsonData = await response.json();
+            showStatus(`成功加载数据文件，包含 ${jsonData.length} 条记录`, "success");
+            console.log("加载的JSON数据样例:", JSON.stringify(jsonData[0]).substring(0, 300) + "...");
+
+            // 转换Neo4j数据为可视化所需的格式
+            return convertNeo4jJsonToVisFormat(jsonData);
+          } catch (error) {
+            console.error("加载JSON数据失败:", error);
+            showStatus(`加载数据文件失败: ${error.message}。使用默认数据。`, "error");
+            return defaultOfflineData;
+          }
+        };
+
+        // 将Neo4j JSON数据转换为可视化所需的格式
+        function convertNeo4jJsonToVisFormat(jsonData) {
+          console.log("开始转换Neo4j数据...");
+
+          // 用于存储转换后的数据
+          const visData = {
+            nodes: [],
+            edges: []
+          };
+
+          // 用于跟踪已处理的节点和关系，避免重复
+          const processedNodes = new Map();
+          const processedRelationships = new Map();
+
+          // 预定义的关系类型颜色映射
+          const relationshipColors = {
+            "包含": "#ff9e6d",
+            "具有": "#66b3ff",
+            "别名是": "#9370db",
+            "关联": "#66cdaa",
+            "依据": "#ff69b4",
+            "研究": "#ffd700"
+          };
+
+          // 处理所有记录
+          jsonData.forEach((record, index) => {
+            // 检查记录格式
+            if (!record.p) {
+              console.warn(`记录 #${index} 没有 'p' 属性，跳过`);
+              return;
+            }
+
+            try {
+              // 处理起始节点
+              if (record.p.start) {
+                const startNode = record.p.start;
+                if (!processedNodes.has(startNode.identity)) {
+                  // 确定节点标签和颜色
+                  let nodeColor = "#97c2fc"; // 默认颜色
+                  let nodeGroup = "Node"; // 默认组别
+
+                  if (startNode.labels && startNode.labels.length > 0) {
+                    nodeGroup = startNode.labels[0];
+                    if (startNode.labels.includes("Concept")) {
+                      nodeColor = "#fb7e81";
+                      nodeGroup = "Concept";
+                    } else if (startNode.labels.includes("Technique")) {
+                      nodeColor = "#7be141";
+                      nodeGroup = "Technique";
+                    } else if (startNode.labels.includes("Theory")) {
+                      nodeColor = "#ffff00";
+                      nodeGroup = "Theory";
+                    } else if (startNode.labels.includes("Chapter")) {
+                      nodeColor = "#97c2fc";
+                      nodeGroup = "Chapter";
+                    }
+                  }
+
+                  // 添加节点
+                  visData.nodes.push({
+                    id: startNode.identity.toString(),
+                    label: startNode.properties.name || "未命名节点",
+                    title: startNode.properties.name || "未命名节点",
+                    group: nodeGroup,
+                    color: nodeColor,
+                    shape: "dot", // 使用圆形节点，类似Neo4j
+                    font: { size: 16, face: "Arial", multi: "html" },
+                    borderWidth: 2,
+                    shadow: true,
+                    properties: startNode.properties
+                  });
+
+                  // 标记为已处理
+                  processedNodes.set(startNode.identity, true);
+                }
+              }
+
+              // 处理终点节点
+              if (record.p.end) {
+                const endNode = record.p.end;
+                if (!processedNodes.has(endNode.identity)) {
+                  // 确定节点标签和颜色
+                  let nodeColor = "#97c2fc"; // 默认颜色
+                  let nodeGroup = "Node"; // 默认组别
+
+                  if (endNode.labels && endNode.labels.length > 0) {
+                    nodeGroup = endNode.labels[0];
+                    if (endNode.labels.includes("Concept")) {
+                      nodeColor = "#fb7e81";
+                      nodeGroup = "Concept";
+                    } else if (endNode.labels.includes("Technique")) {
+                      nodeColor = "#7be141";
+                      nodeGroup = "Technique";
+                    } else if (endNode.labels.includes("Theory")) {
+                      nodeColor = "#ffff00";
+                      nodeGroup = "Theory";
+                    } else if (endNode.labels.includes("Chapter")) {
+                      nodeColor = "#97c2fc";
+                      nodeGroup = "Chapter";
+                    }
+                  }
+
+                  // 添加节点
+                  visData.nodes.push({
+                    id: endNode.identity.toString(),
+                    label: endNode.properties.name || "未命名节点",
+                    title: endNode.properties.name || "未命名节点",
+                    group: nodeGroup,
+                    color: nodeColor,
+                    shape: "dot", // 使用圆形节点，类似Neo4j
+                    font: { size: 16, face: "Arial", multi: "html" },
+                    borderWidth: 2,
+                    shadow: true,
+                    properties: endNode.properties
+                  });
+
+                  // 标记为已处理
+                  processedNodes.set(endNode.identity, true);
+                }
+              }
+
+              // 处理段落中的关系
+              if (record.p.segments && Array.isArray(record.p.segments)) {
+                record.p.segments.forEach((segment, segIndex) => {
+                  if (segment.relationship) {
+                    const rel = segment.relationship;
+
+                    // 确保不重复添加同一关系
+                    const relKey = `${rel.start}-${rel.end}-${rel.identity}`;
+                    if (processedRelationships.has(relKey)) {
+                      return;
+                    }
+
+                    // 获取关系类型的特定颜色
+                    const relColor = relationshipColors[rel.type] || "#999999";
+
+                    // 添加边
+                    visData.edges.push({
+                      id: `e${index}_${segIndex}_${rel.identity}`,
+                      from: rel.start.toString(),
+                      to: rel.end.toString(),
+                      type: rel.type,
+                      label: rel.type,
+                      title: rel.type,
+                      color: relColor,
+                      width: 1.5,
+                      arrows: {
+                        to: { enabled: true, scaleFactor: 1.2 }
+                      },
+                      font: {
+                        align: "middle",
+                        size: 14,
+                        color: "#333",
+                        background: "rgba(255,255,255,0.85)",
+                        strokeWidth: 2
+                      },
+                      smooth: {
+                        type: "cubicBezier",
+                        roundness: 0.3
+                      },
+                      properties: rel.properties || {}
+                    });
+
+                    // 标记为已处理
+                    processedRelationships.set(relKey, true);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`处理记录 #${index} 时出错:`, error);
+            }
+          });
+
+          console.log(`转换完成，生成 ${visData.nodes.length} 个节点和 ${visData.edges.length} 条边`);
+          return visData;
+        };
+
+      // 离线模式下的可视化
+      async function renderOfflineGraph() {
+        // 使用原生vis.js来渲染离线数据
+        showStatus("使用离线模式 - 正在从JSON文件加载数据...", "warning");
+
+        // 清空图谱容器
+        const container = document.getElementById("knowledge-graph-container");
+        container.innerHTML = "";
+
+        try {
+          // 从JSON文件加载数据
+          offlineData = await loadNeo4jDataFromJson();
+          showStatus(`数据加载成功 - 准备渲染 ${offlineData.nodes.length} 个节点和 ${offlineData.edges.length} 条关系`, "success");
+        } catch (error) {
+          console.error("加载数据失败，使用默认数据:", error);
+          showStatus("数据加载失败 - 使用默认数据", "error");
+          offlineData = defaultOfflineData;
+        }
+
+        // 预定义的关系类型颜色映射（与转换函数中的保持一致）
+        const relationshipColors = {
+          "包含": "#ff9e6d",
+          "具有": "#66b3ff",
+          "别名是": "#9370db",
+          "关联": "#66cdaa",
+          "依据": "#ff69b4",
+          "研究": "#ffd700"
+        };
+
+        // 转换数据格式为vis.js格式
+        const nodes = new vis.DataSet(offlineData.nodes.map(node => {
+          return {
+            id: node.id || node.identity?.toString() || String(Math.random()),
+            label: node.label || node.properties?.name || "未命名节点",
+            title: node.title || node.properties?.name || "未命名节点",
+            group: node.group || "Node",
+            color: node.color || "#97c2fc",
+            shape: node.shape || "dot", // 使用圆形节点，类似Neo4j
+            font: node.font || {
+              size: 16,
+              face: "Arial",
+              multi: "html"
+            },
+            borderWidth: node.borderWidth || 2,
+            shadow: node.shadow || true
+          };
+        }));
+
+        const edges = new vis.DataSet(offlineData.edges.map(edge => {
+          // 获取关系类型作为标签
+          const relationshipType = edge.type || edge.label || "";
+          // 获取关系类型的特定颜色
+          const relColor = relationshipColors[relationshipType] || "#999999";
+
+          return {
+            id: edge.id || String(Math.random()),
+            from: edge.from,
+            to: edge.to,
+            label: relationshipType,
+            title: relationshipType,
+            type: relationshipType,
+            color: edge.color || relColor,
+            width: edge.width || 1.5,
+            arrows: edge.arrows || {
+              to: { enabled: true, scaleFactor: 1.2 }
+            },
+            font: edge.font || {
+              align: "middle",
+              size: 14,
+              color: "#333",
+              background: "rgba(255,255,255,0.85)",
+              strokeWidth: 2
+            },
+            smooth: edge.smooth || {
+              type: "cubicBezier",
+              roundness: 0.3
+            }
+          };
+        }));
+
+        // 创建vis Network
+        const data = { nodes, edges };
+        const options = {
+          nodes: {
+            shape: "dot",
+            font: {
+              size: 16,
+              face: "Arial",
+              multi: "html"
+            },
+            borderWidth: 2,
+            shadow: true,
+            scaling: {
+              min: 16,
+              max: 32,
+              label: {
+                enabled: true,
+                min: 14,
+                max: 24
+              }
+            }
+          },
+          edges: {
+            arrows: {
+              to: { enabled: true, scaleFactor: 1.2 }
+            },
+            width: 1.5,
+            font: {
+              size: 14,
+              align: "middle",
+              strokeWidth: 2,
+              color: "#333",
+              background: "rgba(255,255,255,0.85)"
+            },
+            smooth: {
+              type: "cubicBezier",
+              roundness: 0.3
+            }
+          },
+          layout: {
+            improvedLayout: true
+          },
+          physics: {
+            enabled: true,
+            solver: "forceAtlas2Based",
+            forceAtlas2Based: {
+              gravitationalConstant: -80,
+              centralGravity: 0.1,
+              springLength: 160,
+              springConstant: 0.04,
+              damping: 0.9,
+              avoidOverlap: 1
+            },
+            minVelocity: 0.5,
+            stabilization: {
+              enabled: true,
+              iterations: 1000,
+              updateInterval: 50,
+              fit: true
+            }
+          },
+          interaction: {
+            hover: true,
+            navigationButtons: true,
+            keyboard: {
+              enabled: true
+            },
+            tooltipDelay: 200,
+            hideEdgesOnDrag: false,
+            zoomView: true
+          }
+        };
+
+        // 创建网络并设置物理引擎自动冻结
+        offlineNetwork = new vis.Network(container, data, options);
+        setPhysicsAutoFreeze(offlineNetwork, { enable: true, maxWaitMs: 3000 });
+        setNetworkTitles(offlineNetwork);
+
+        // 分析离线数据中的关系类型
+        setTimeout(() => {
+          analyzeRelationshipTypes(offlineNetwork);
+        }, 500);
+
+        // 更新图例，显示实际使用的关系类型
+        updateLegendWithRelationshipTypes(Object.keys(relationshipColors));
+
+        // 应用布局预设
+        const layoutSelectEl = document.getElementById("layout-select");
+        if (layoutSelectEl) {
+          applyLayoutPreset(layoutSelectEl.value || "repulsion");
+        }
+
+        // 更新连接状态
+        isConnected = true; // 虽然是离线模式，但UI交互上视为连接成功
+        document.getElementById('offline-mode').checked = true;
+      }
+
+      // 更新图例显示当前关系类型
+      function updateLegendWithRelationshipTypes(relationshipTypes) {
+        const legendContainer = document.querySelector('.legend-container');
+        if (!legendContainer) return;
+
+        // 关系类型的颜色映射
+        const relationshipColors = {
+          "包含": "#ff9e6d",
+          "具有": "#66b3ff",
+          "别名是": "#9370db",
+          "关联": "#66cdaa",
+          "依据": "#ff69b4",
+          "研究": "#ffd700"
+        };
+
+        // 清除现有的关系图例
+        const relationshipLegend = document.querySelector('.legend-container > div[style*="grid-column: span 2"]');
+        if (relationshipLegend) {
+          relationshipLegend.innerHTML = '';
+
+          // 添加标题
+          const legendTitle = document.createElement('div');
+          legendTitle.style.fontWeight = 'bold';
+          legendTitle.style.marginBottom = '8px';
+          legendTitle.textContent = '关系类型:';
+          relationshipLegend.appendChild(legendTitle);
+
+          // 为每种关系类型创建图例项
+          relationshipTypes.forEach(relType => {
+            const relColor = relationshipColors[relType] || "#999999";
+
+            const legendItem = document.createElement('div');
+            legendItem.style.display = 'flex';
+            legendItem.style.alignItems = 'center';
+            legendItem.style.marginBottom = '4px';
+
+            // 创建SVG表示关系
+            legendItem.innerHTML = `
+              <svg height="2" width="20" style="margin-right: 8px;">
+                <line x1="0" y1="0" x2="15" y2="0" style="stroke:${relColor}; stroke-width:2;" />
+                <polygon points="15,0 12,-3 12,3" style="fill:${relColor};" />
+              </svg>
+              <span>${relType}</span>
+            `;
+
+            relationshipLegend.appendChild(legendItem);
+          });
+        }
+      }
+
+      // 配置NeoVis连接Neo4j
+      function initNeoVis(initialCypher) {
+        // 获取连接参数
+        const serverUrl = document.getElementById('neo4j-url').value;
+        const serverUser = document.getElementById('neo4j-user').value;
+        const serverPassword = document.getElementById('neo4j-password').value;
+        isOfflineMode = document.getElementById('offline-mode').checked;
+
+        // 保存连接配置
+        saveConnectionConfig();
+
+        // 如果是离线模式，直接渲染离线图谱
+        if (isOfflineMode) {
+          renderOfflineGraph();
+          return null;
+        }
+
+        showStatus("正在连接Neo4j数据库...", "warning");
+
+        // 使用neovis.js连接Neo4j
+        const config = {
+          containerId: "knowledge-graph-container",
+          neo4j: {
+            serverUrl: serverUrl,
+            serverUser: serverUser,
+            serverPassword: serverPassword,
+            driverConfig: {
+              connectionTimeout: 30000, // 30秒连接超时
+              maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3小时连接寿命
+              maxConnectionPoolSize: 100, // 连接池大小
+              connectionAcquisitionTimeout: 2 * 60 * 1000 // 2分钟连接获取超时
+            }
+          },
+          initialCypher: initialCypher || "MATCH (n)-[r]->(m) RETURN n, r, m",
+          labels: {
+            Node: {
+              label: "name",
+              value: "pagerank",
+              group: "community",
+              color: "#97c2fc"
+            },
+            // 根据节点类型配置不同的颜色和样式
+            Chapter: {
+              label: "name",
+              value: "pagerank",
+              group: "community",
+              color: "#97c2fc"
+            },
+            Concept: {
+              label: "name",
+              value: "pagerank",
+              group: "community",
+              color: "#fb7e81"
+            },
+            Technique: {
+              label: "name",
+              value: "pagerank",
+              group: "community",
+              color: "#7be141"
+            },
+            Theory: {
+              label: "name",
+              value: "pagerank",
+              group: "community",
+              color: "#ffff00"
+            }
+          },
+          // 动态处理所有关系类型
+          captionProperties: ["type", "relationship.type", "segments.relationship.type", "name"],  // 尝试从这些属性中获取关系标签
+          relationships: {
+            // 已知的关系类型配置
+            "包含": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            "具有": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            "别名是": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            "关联": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            "依据": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            "研究": {
+              caption: "type",
+              color: "#999999",
+              arrows: { to: { enabled: true, scaleFactor: 1.2 } }
+            },
+            // 通用关系配置，用于处理未来可能新增的关系类型
+            "RELATIONSHIP": {
+              thickness: "count",
+              caption: "type",  // 使用关系的type属性作为标签
+              color: "#999999",
+              arrows: {
+                to: { enabled: true, scaleFactor: 1.2 }
+              },
+              font: {
+                size: 14,
+                align: "middle",
+                color: "#333",
+                background: "rgba(255,255,255,0.85)"
+              }
+            }
+          },
+          visConfig: {
+            nodes: {
+              shape: "dot",
+              font: {
+                size: 16,
+                face: "Arial"
+              },
+              borderWidth: 2,
+              shadow: true
+            },
+            edges: {
+              arrows: {
+                to: { enabled: true, scaleFactor: 1.2 }
+              },
+              color: {
+                color: "#999999",
+                highlight: "#666666"
+              },
+              width: 1.5,
+              font: {
+                size: 14,
+                align: "middle",
+                strokeWidth: 2,
+                color: "#333",
+                background: "rgba(255,255,255,0.85)"
+              },
+              smooth: {
+                type: "continuous",
+                forceDirection: "none",
+                roundness: 0.25
+              }
+            },
+            layout: { hierarchical: { enabled: false } },
+            physics: {
+              enabled: true,
+              solver: "repulsion",
+              repulsion: {
+                nodeDistance: 300,
+                springLength: 240,
+                springConstant: 0.05,
+                damping: 0.9
+              },
+              minVelocity: 0.7,
+              stabilization: {
+                enabled: true,
+                iterations: 500,
+                updateInterval: 80
+              }
+            },
+            interaction: {
+              hover: true,
+              navigationButtons: true,
+              keyboard: {
+                enabled: true
+              },
+              zoomView: true
+            }
+          },
+          // 注册事件回调
+          callbacks: {
+            onVizLoad: function(vizInstance) {
+              showStatus("Neo4j连接成功", "success");
+              isConnected = true;
+              const network =
+                vizInstance && (vizInstance.network || vizInstance._network)
+                  ? (vizInstance.network || vizInstance._network)
+                  : null;
+
+              try {
+                // 捕获Neo4j原始数据结构用于调试
+                const rawData = vizInstance._data || vizInstance.nodes || (vizInstance.network && vizInstance.network.body && vizInstance.network.body.data);
+                if (rawData) {
+                  console.log("Neo4j连接返回的原始数据:", JSON.stringify(rawData).substring(0, 500) + "...");
+                }
+
+                // 尝试处理原始Neo4j数据
+                processNeo4jRawData(network, vizInstance);
+              } catch (err) {
+                console.error("处理Neo4j原始数据时出错:", err);
+              }
+
+              setPhysicsAutoFreeze(network, { enable: true });
+              setNetworkTitles(network);
+
+              // 分析并记录所有关系类型
+              setTimeout(() => {
+                analyzeRelationshipTypes(network);
+              }, 1500);
+
+              const layoutSelectEl = document.getElementById("layout-select");
+              if (layoutSelectEl) {
+                applyLayoutPreset(layoutSelectEl.value || "hierarchical");
+              }
+            },
+            onError: function(err) {
+              console.error("NeoVis错误:", err);
+              showStatus("Neo4j连接错误: " + formatNeo4jError(err), "error");
+              isConnected = false;
+
+              // 在连接失败时，提示用户切换到离线模式
+              if (!isOfflineMode) {
+                const goOffline = confirm("无法连接到Neo4j数据库，是否切换到离线模式？");
+                if (goOffline) {
+                  document.getElementById('offline-mode').checked = true;
+                  saveConnectionConfig();
+                  renderOfflineGraph();
+                }
+              }
+            }
+          }
+        };
+
+        try {
+          const NeoVisLib = window.NeoVis || window.Neovis || window.neovis;
+          if (!NeoVisLib) {
+            showStatus("neovis.js 未加载或加载失败，请刷新页面后重试", "error");
+            return null;
+          }
+          const NeoVisConstructor = NeoVisLib.default || NeoVisLib;
+          viz = new NeoVisConstructor(config);
+          return viz;
+        } catch (error) {
+          console.error("初始化NeoVis失败:", error);
+          showStatus("初始化图谱失败: " + formatNeo4jError(error), "error");
+          return null;
+        }
+      }
+
+      // 存储所有已识别的关系类型
+      let discoveredRelationshipTypes = new Set(["包含", "具有", "别名是", "关联", "依据", "研究"]);
+
+      // 处理Neo4j返回的原始数据结构
+      function processNeo4jRawData(network, vizInstance) {
+        if (!network || !network.body || !network.body.data) {
+          console.log("无法访问网络数据结构");
+          return;
+        }
+
+        try {
+          // 尝试获取原始的Neo4j响应数据
+          let rawData = null;
+
+          // 从不同可能的位置查找数据
+          if (vizInstance._data) {
+            rawData = vizInstance._data;
+          } else if (vizInstance.rawNeo4jResponse) {
+            rawData = vizInstance.rawNeo4jResponse;
+          } else if (vizInstance._rawData) {
+            rawData = vizInstance._rawData;
+          }
+
+          if (!rawData) {
+            console.log("未找到原始Neo4j数据");
+            return;
+          }
+
+          console.log("处理原始Neo4j数据:", JSON.stringify(rawData).substring(0, 300) + "...");
+
+          // 尝试从原始数据中提取关系类型
+          const relationshipTypes = new Set();
+
+          // 处理不同可能的数据结构
+          if (Array.isArray(rawData)) {
+            // 如果是数组格式
+            rawData.forEach(item => {
+              extractRelationshipTypesFromItem(item, relationshipTypes);
+            });
+          } else if (typeof rawData === 'object') {
+            // 如果是对象格式
+            extractRelationshipTypesFromItem(rawData, relationshipTypes);
+          }
+
+          // 将提取的关系类型应用到边上
+          if (relationshipTypes.size > 0) {
+            console.log("从原始数据提取到的关系类型:", Array.from(relationshipTypes));
+
+            // 将新关系类型添加到全局集合
+            Array.from(relationshipTypes).forEach(type => {
+              if (!discoveredRelationshipTypes.has(type)) {
+                discoveredRelationshipTypes.add(type);
+              }
+            });
+
+            // 更新边的样式和标签
+            updateEdgeLabels(network, relationshipTypes);
+          }
+        } catch (error) {
+          console.error("处理Neo4j原始数据时出错:", error);
+        }
+      }
+
+      // 从Neo4j响应项中递归提取关系类型
+      function extractRelationshipTypesFromItem(item, relationshipTypes) {
+        if (!item) return;
+
+        // 直接检查item是否包含关系类型信息
+        if (item.type && typeof item.type === 'string') {
+          relationshipTypes.add(item.type);
+        }
+
+        // 检查是否有p.segments结构
+        if (item.p && item.p.segments && Array.isArray(item.p.segments)) {
+          item.p.segments.forEach(segment => {
+            if (segment.relationship && segment.relationship.type) {
+              relationshipTypes.add(segment.relationship.type);
+            }
+          });
+        }
+
+        // 检查是否有relationship对象
+        if (item.relationship && item.relationship.type) {
+          relationshipTypes.add(item.relationship.type);
+        }
+
+        // 递归检查所有子对象和数组
+        if (typeof item === 'object') {
+          Object.keys(item).forEach(key => {
+            if (typeof item[key] === 'object' && item[key] !== null) {
+              extractRelationshipTypesFromItem(item[key], relationshipTypes);
+            }
+          });
+        }
+      }
+
+      // 更新边的标签和样式
+      function updateEdgeLabels(network, relationshipTypes) {
+        if (!network || !network.body || !network.body.data) return;
+
+        try {
+          const edgeDs = network.body.data.edges;
+          const edges = edgeDs.get();
+
+          // 如果有明确的关系类型，尝试更新所有边
+          if (relationshipTypes && relationshipTypes.size > 0) {
+            edgeDs.update(edges.map(e => {
+              // 获取关系类型
+              const relType = getRelationshipType(e);
+
+              if (relType && relType !== "关系") {
+                return {
+                  id: e.id,
+                  label: relType,
+                  title: relType,
+                  color: "#999999",
+                  width: 1.5,
+                  arrows: {
+                    to: { enabled: true, scaleFactor: 1.2 }
+                  },
+                  font: {
+                    align: "middle",
+                    size: 14,
+                    color: "#333",
+                    background: "rgba(255,255,255,0.85)"
+                  }
+                };
+              }
+              return null; // 不更新没有明确关系类型的边
+            }).filter(Boolean)); // 过滤掉null值
+          }
+        } catch (error) {
+          console.error("更新边标签时出错:", error);
+        }
+      }
+
+      // 分析图谱中的关系类型
+      function analyzeRelationshipTypes(network) {
+        if (!network || !network.body || !network.body.data) return [];
+
+        try {
+          const edgeDs = network.body.data.edges;
+          const edges = edgeDs.get();
+          const newTypes = [];
+
+          // 遍历所有边，尝试提取关系类型
+          edges.forEach(edge => {
+            const relType = getRelationshipType(edge);
+            if (relType && !discoveredRelationshipTypes.has(relType)) {
+              discoveredRelationshipTypes.add(relType);
+              newTypes.push(relType);
+            }
+          });
+
+          if (newTypes.length > 0) {
+            console.log("发现新的关系类型:", newTypes);
+            showStatus(`发现 ${newTypes.length} 种新的关系类型: ${newTypes.join(", ")}`, "success");
+          }
+
+          return Array.from(discoveredRelationshipTypes);
+        } catch (error) {
+          console.error("分析关系类型时出错:", error);
+          return [];
+        }
+      }
+
+      // 根据查询字符串搜索节点
+      function searchNodes(searchText) {
+        if (!searchText.trim() || !isConnected) return;
+
+        // 如果在离线模式下，只使用简单的前端过滤
+        if (isOfflineMode) {
+          const filteredNodes = offlineData.nodes.filter(node => {
+            const nodeText = (node.properties.title || node.properties.name || "").toLowerCase();
+            return nodeText.includes(searchText.toLowerCase());
+          });
+
+          if (filteredNodes.length === 0) {
+            showStatus("未找到匹配的节点", "warning");
+            return;
+          }
+
+          showStatus(`找到 ${filteredNodes.length} 个匹配节点`, "success");
+          return;
+        }
+
+        // 构建Cypher查询语句，在节点的name和title属性中搜索
+        const cypher = `
+          MATCH (n)
+          WHERE n.name =~ '(?i).*${searchText}.*' OR n.title =~ '(?i).*${searchText}.*'
+          WITH n
+          OPTIONAL MATCH (n)-[r]-(m)
+          RETURN n, r, m
+        `;
+
+        try {
+          // 执行查询
+          viz.renderWithCypher(cypher);
+          const network = viz && (viz.network || viz._network) ? (viz.network || viz._network) : null;
+          setPhysicsAutoFreeze(network, { enable: true });
+          setNetworkTitles(network);
+
+          // 分析并记录新的关系类型
+          setTimeout(() => {
+            analyzeRelationshipTypes(network);
+          }, 1000);
+
+          showStatus("执行查询成功", "success");
+        } catch (error) {
+          showStatus("执行查询失败: " + formatNeo4jError(error), "error");
+        }
+      }
+
+      // 页面加载完成后初始化知识图谱
+      window.onload = function() {
+        // 检查登录状态
+        checkLogin();
+
+        // 加载保存的连接配置
+        loadConnectionConfig();
+
+        // 默认使用离线模式（从JSON文件加载数据）
+        document.getElementById('offline-mode').checked = true;
+        isOfflineMode = true;
+
+        // 禁用Neo4j连接字段
+        const connectionFields = document.querySelectorAll('#neo4j-url, #neo4j-user, #neo4j-password');
+        connectionFields.forEach(field => {
+          field.disabled = true;
+        });
+
+        // 保存配置
+        saveConnectionConfig();
+
+        // 连接按钮事件监听
+        document.getElementById("connect-button").addEventListener("click", function() {
+          // 清空可能存在的先前实例
+          const container = document.getElementById("knowledge-graph-container");
+          container.innerHTML = "";
+
+          // 根据当前模式选择渲染方法
+          if (isOfflineMode) {
+            renderOfflineGraph();
+          } else {
+            // 初始化新的Neo4j连接
+            viz = initNeoVis();
+            if (viz) {
+              try {
+                viz.render();
+                console.log("NeoVis initialized and rendering");
+              } catch (error) {
+                console.error("渲染图谱失败:", error);
+                showStatus("渲染图谱失败: " + formatNeo4jError(error), "error");
+              }
+            }
+          }
+        });
+
+        // 测试连接按钮
+        document.getElementById("test-connection-button").addEventListener("click", function() {
+          testNeo4jConnection();
+        });
+
+        // 离线模式切换事件
+        document.getElementById("offline-mode").addEventListener("change", function(event) {
+          const isOffline = event.target.checked;
+          isOfflineMode = isOffline;
+          const connectionFields = document.querySelectorAll('#neo4j-url, #neo4j-user, #neo4j-password');
+
+          // 在离线模式下禁用连接字段
+          connectionFields.forEach(field => {
+            field.disabled = isOffline;
+          });
+
+          saveConnectionConfig();
+
+          if (isOffline) {
+            renderOfflineGraph();
+          } else {
+            isConnected = false;
+            showStatus("已关闭离线模式，请点击'连接/重新连接'连接 Neo4j", "warning");
+          }
+        });
+
+        // 搜索按钮事件监听
+        document.getElementById("search-button").addEventListener("click", function() {
+          if (!isConnected) {
+            showStatus("请先连接到Neo4j数据库或使用离线模式", "warning");
+            return;
+          }
+          const searchText = document.getElementById("search-node").value.trim();
+          searchNodes(searchText);
+        });
+
+        // 布局选择器事件监听
+        const layoutSelect = document.getElementById("layout-select");
+        if (layoutSelect) {
+          layoutSelect.addEventListener("change", function(e) {
+            const preset = e.target.value;
+            applyLayoutPreset(preset);
+          });
+        }
+
+        // 回车键搜索
+        document.getElementById("search-node").addEventListener("keypress", function(event) {
+          if (event.key === "Enter") {
+            document.getElementById("search-button").click();
+          }
+        });
+
+        // Cypher查询执行按钮
+        document.getElementById("execute-query").addEventListener("click", function() {
+          if (!isConnected) {
+            showStatus("请先连接到Neo4j数据库或使用离线模式", "warning");
+            return;
+          }
+
+          if (isOfflineMode) {
+            showStatus("离线模式下不支持自定义Cypher查询", "warning");
+            return;
+          }
+
+          const cypher = document.getElementById("cypher-query").value.trim();
+          if (!cypher) {
+            showStatus("请输入Cypher查询语句", "warning");
+            return;
+          }
+
+          try {
+            viz.renderWithCypher(cypher);
+            const network = viz && (viz.network || viz._network) ? (viz.network || viz._network) : null;
+            setPhysicsAutoFreeze(network, { enable: true });
+            setNetworkTitles(network);
+
+            // 分析并记录新的关系类型
+            setTimeout(() => {
+              analyzeRelationshipTypes(network);
+            }, 1000);
+
+            showStatus("执行查询成功", "success");
+          } catch (error) {
+            showStatus("执行查询失败: " + formatNeo4jError(error), "error");
+          }
+        });
+
+        // 自动加载离线图谱
+        isOfflineMode = true;
+        document.getElementById('offline-mode').checked = true;
+        renderOfflineGraph();
+        showStatus("正在加载知识图谱数据...", "warning");
+      };
+    </script>
+  </body>
+</html>
