@@ -306,6 +306,7 @@
 
       <!-- 连接配置区域 -->
       <div class="connection-container">
+        
         <h3>Neo4j连接设置</h3>
         <label for="neo4j-url">服务器地址</label>
         <input type="text" id="neo4j-url" value="bolt://localhost:7687" />
@@ -313,14 +314,14 @@
         <input type="text" id="neo4j-user" value="neo4j" />
         <label for="neo4j-password">密码</label>
         <input type="password" id="neo4j-password" value="asdfghjkl" />
-
+        
         <div class="offline-mode">
           <input type="checkbox" id="offline-mode" />
           <label for="offline-mode">使用离线模式（不连接Neo4j）</label>
         </div>
 
-        <button id="connect-button">连接/重新连接</button>
-        <button id="test-connection-button" type="button">测试连接</button>
+        <button id="connect-button">连接/重新连接neo4j</button>
+        <button id="test-connection-button" type="button">测试连接neo4j</button>
       </div>
 
       <div class="layout-container">
@@ -337,25 +338,7 @@
       <!-- 状态信息 -->
       <div id="status-message" class="status-message"></div>
 
-      <div class="legend-container">
-        <!-- 节点类型图例 -->
-        <div><span class="legend-dot" style="background:#97c2fc"></span>Chapter</div>
-        <div><span class="legend-dot" style="background:#fb7e81"></span>Concept</div>
-        <div><span class="legend-dot" style="background:#7be141"></span>Technique</div>
-        <div><span class="legend-dot" style="background:#ffff00"></span>Theory</div>
-
-        <!-- 关系图例 - 使用箭头线表示关系 -->
-        <div style="grid-column: span 2; border-top: 1px solid #eee; padding-top: 6px; margin-top: 4px;">
-          <div style="display: flex; align-items: center; margin-bottom: 4px;">
-            <svg height="2" width="20" style="margin-right: 8px;">
-              <line x1="0" y1="0" x2="15" y2="0" style="stroke:#999999; stroke-width:2;" />
-              <polygon points="15,0 12,-3 12,3" style="fill:#999999;" />
-            </svg>
-            <span>关系 (显示为带箭头的灰色线)</span>
-          </div>
-          <div style="font-size: 11px; color: #666;">关系名称显示在连线中间</div>
-        </div>
-      </div>
+      
     </div>
 
     <!-- 知识图谱容器 - 占满整个屏幕 -->
@@ -481,15 +464,15 @@
               // 存储原始关系类型，以便后续处理
               originalType: relType,
               // 统一应用灰色样式
-              color: "#999999",
+              color: { color: "#999999", highlight: "#666666", inherit: false },
               width: 1.5,
               arrows: {
                 to: { enabled: true, scaleFactor: 1.2 }
               },
               font: {
                 align: "middle",
-                size: 14,
-                color: "#333",
+                size: 12,
+                color: "#777777",
                 background: "rgba(255,255,255,0.85)"
               }
             };
@@ -598,15 +581,16 @@
           };
         } else if (preset === "forceAtlas2") {
           options = {
-            layout: { hierarchical: { enabled: false } },
+            layout: { improvedLayout: true, // 启用改进的布局算法
+              hierarchical: { enabled: false } },
             physics: {
               enabled: true,
               solver: "forceAtlas2Based",
               forceAtlas2Based: {
-                gravitationalConstant: -80,
-                centralGravity: 0.2,
-                springLength: 130,
-                springConstant: 0.05,
+                gravitationalConstant: -200,
+                centralGravity: 0.06,
+                springLength: 260,
+                springConstant: 0.035,
                 damping: 0.9,
                 avoidOverlap: 1
               },
@@ -840,7 +824,7 @@
         }
       }
 
-      // 离线模式下的默认模拟数据（作为备用）
+        // 离线模式下的默认模拟数据（作为备用）
         const defaultOfflineData = {
           nodes: [
           { id: "1", labels: ["Chapter"], properties: { name: "绪论", chapterNumber: 1 } },
@@ -902,14 +886,14 @@
           const processedNodes = new Map();
           const processedRelationships = new Map();
 
-          // 预定义的关系类型颜色映射
+          // 预定义的关系类型颜色映射 - 统一使用灰色
           const relationshipColors = {
-            "包含": "#ff9e6d",
-            "具有": "#66b3ff",
-            "别名是": "#9370db",
-            "关联": "#66cdaa",
-            "依据": "#ff69b4",
-            "研究": "#ffd700"
+            "包含": "#999999",
+            "具有": "#999999",
+            "别名是": "#999999",
+            "关联": "#999999",
+            "依据": "#999999",
+            "研究": "#999999"
           };
 
           // 处理所有记录
@@ -1032,15 +1016,15 @@
                       type: rel.type,
                       label: rel.type,
                       title: rel.type,
-                      color: relColor,
+                      color: { color: relColor, highlight: "#666666", inherit: false },
                       width: 1.5,
                       arrows: {
                         to: { enabled: true, scaleFactor: 1.2 }
                       },
                       font: {
                         align: "middle",
-                        size: 14,
-                        color: "#333",
+                        size: 12,
+                        color: "#777777",
                         background: "rgba(255,255,255,0.85)",
                         strokeWidth: 2
                       },
@@ -1086,12 +1070,12 @@
 
         // 预定义的关系类型颜色映射（与转换函数中的保持一致）
         const relationshipColors = {
-          "包含": "#ff9e6d",
-          "具有": "#66b3ff",
-          "别名是": "#9370db",
-          "关联": "#66cdaa",
-          "依据": "#ff69b4",
-          "研究": "#ffd700"
+          "包含": "#999999",
+          "具有": "#999999",
+          "别名是": "#999999",
+          "关联": "#999999",
+          "依据": "#999999",
+          "研究": "#999999"
         };
 
         // 转换数据格式为vis.js格式
@@ -1113,37 +1097,37 @@
           };
         }));
 
-        const edges = new vis.DataSet(offlineData.edges.map(edge => {
-          // 获取关系类型作为标签
-          const relationshipType = edge.type || edge.label || "";
-          // 获取关系类型的特定颜色
-          const relColor = relationshipColors[relationshipType] || "#999999";
+          const edges = new vis.DataSet(offlineData.edges.map(edge => {
+            // 获取关系类型作为标签
+            const relationshipType = edge.type || edge.label || "";
+            // 获取关系类型的特定颜色
+            const relColor = relationshipColors[relationshipType] || "#999999";
 
-          return {
-            id: edge.id || String(Math.random()),
-            from: edge.from,
-            to: edge.to,
-            label: relationshipType,
-            title: relationshipType,
-            type: relationshipType,
-            color: edge.color || relColor,
-            width: edge.width || 1.5,
-            arrows: edge.arrows || {
-              to: { enabled: true, scaleFactor: 1.2 }
-            },
-            font: edge.font || {
-              align: "middle",
-              size: 14,
-              color: "#333",
-              background: "rgba(255,255,255,0.85)",
-              strokeWidth: 2
-            },
-            smooth: edge.smooth || {
-              type: "cubicBezier",
-              roundness: 0.3
-            }
-          };
-        }));
+            return {
+              id: edge.id || String(Math.random()),
+              from: edge.from,
+              to: edge.to,
+              label: relationshipType,
+              title: relationshipType,
+              type: relationshipType,
+              color: { color: edge.color || relColor, highlight: "#666666", inherit: false },
+              width: edge.width || 1.5,
+              arrows: edge.arrows || {
+                to: { enabled: true, scaleFactor: 1.2 }
+              },
+              font: edge.font || {
+                align: "middle",
+                size: 14,
+                color: "#333",
+                background: "rgba(255,255,255,0.85)",
+                strokeWidth: 2
+              },
+              smooth: edge.smooth || {
+                type: "cubicBezier",
+                roundness: 0.3
+              }
+            };
+          }));
 
         // 创建vis Network
         const data = { nodes, edges };
@@ -1172,11 +1156,16 @@
               to: { enabled: true, scaleFactor: 1.2 }
             },
             width: 1.5,
+            color: {
+              color: "#999999",
+              highlight: "#666666",
+              inherit: false
+            },
             font: {
               size: 14,
               align: "middle",
               strokeWidth: 2,
-              color: "#333",
+              color: "#999999",  
               background: "rgba(255,255,255,0.85)"
             },
             smooth: {
@@ -1191,10 +1180,10 @@
             enabled: true,
             solver: "forceAtlas2Based",
             forceAtlas2Based: {
-              gravitationalConstant: -80,
-              centralGravity: 0.1,
-              springLength: 160,
-              springConstant: 0.04,
+              gravitationalConstant: -200,
+              centralGravity: 0.06,
+              springLength: 260,
+              springConstant: 0.035,
               damping: 0.9,
               avoidOverlap: 1
             },
@@ -1247,14 +1236,14 @@
         const legendContainer = document.querySelector('.legend-container');
         if (!legendContainer) return;
 
-        // 关系类型的颜色映射
+        // 关系类型的颜色映射 - 统一使用灰色
         const relationshipColors = {
-          "包含": "#ff9e6d",
-          "具有": "#66b3ff",
-          "别名是": "#9370db",
-          "关联": "#66cdaa",
-          "依据": "#ff69b4",
-          "研究": "#ffd700"
+          "包含": "#999999",
+          "具有": "#999999",
+          "别名是": "#999999",
+          "关联": "#999999",
+          "依据": "#999999",
+          "研究": "#999999"
         };
 
         // 清除现有的关系图例
@@ -1425,7 +1414,8 @@
               },
               color: {
                 color: "#999999",
-                highlight: "#666666"
+                highlight: "#666666",
+                inherit: false
               },
               width: 1.5,
               font: {
@@ -1652,7 +1642,7 @@
                   id: e.id,
                   label: relType,
                   title: relType,
-                  color: "#999999",
+                  color: { color: "#999999", highlight: "#666666", inherit: false },
                   width: 1.5,
                   arrows: {
                     to: { enabled: true, scaleFactor: 1.2 }
