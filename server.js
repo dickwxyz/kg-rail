@@ -5,7 +5,15 @@ const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3").verbose();   
 const cors = require("cors"); // 引入 CORS    
 const app = express();    
-const port = 5500;    
+const port = parseInt(process.env.PORT || "5500", 10);    
+
+process.on('unhandledRejection', (reason) => {
+  console.error('未处理的 Promise 拒绝:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('未捕获的异常:', error);
+});
 
 // 数据库初始化：连接本地 SQLite 文件（user.db）
 const db = new sqlite3.Database("./user.db", (err) => { 
@@ -23,8 +31,11 @@ app.use(
 app.use(bodyParser.json());
 app.use(express.static(__dirname)); // 静态文件服务
 // 预检请求处理（符合跨域场景的浏览器预检）
-app.options("/register", (req, res) => {
-  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+// 为所有路由处理预检请求
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
   res.sendStatus(200);
 });
 // 允许跨域请求（如果前端与后端不同端口）
@@ -522,6 +533,12 @@ app.post('/api/submit-test', (req, res) => {
 });
 
 // 启动服务：监听本地端口
-app.listen(port, () => {
-  console.log(`服务器运行在 http://127.0.0.1:${port}`);
+app.use((err, req, res, next) => {
+  console.error('服务器错误:', err.message);
+  res.status(500).json({ success: false, message: '服务器内部错误' });
+});
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`服务器运行在 http://0.0.0.0:${port}`);
+  console.log(`局域网可通过 http://<本机IP地址>:${port} 访问`);
 });

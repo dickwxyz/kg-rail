@@ -189,7 +189,7 @@
             // ========== 步骤3: 调用后端API验证用户身份 ==========
             // *** 重要修复 ***: 发送POST请求到 /login 接口
             // 后端会在user.db数据库中查询student或teacher表进行验证
-            const resp = await fetch("http://127.0.0.1:5500/login", {
+            const resp = await fetch("/login", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ userId, password }),
