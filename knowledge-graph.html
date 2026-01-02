@@ -170,6 +170,17 @@
         background-color: #f9f9f9;
       }
 
+      /* 卡片式布局 */
+      .card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        position: relative;
+        z-index: 10;
+      }
+
       /* 响应式设计 */
       @media (max-width: 1200px) {
         nav ul {
@@ -231,6 +242,11 @@
       <div id="status-message" class="status-message"></div>
     </div>
 
+    <!-- 登录提示 -->
+    <div id="login-reminder" class="card" style="display: none; margin: 20px; position: relative; z-index: 100;">
+        <p>请先<a href="./login.html">登录</a>后查看知识图谱。</p>
+    </div>
+
     <!-- 知识图谱容器 - 占满整个屏幕 -->
     <div id="knowledge-graph-container"></div>
 
@@ -246,6 +262,9 @@
           const logoutLink = document.getElementById("logout-link");
           const loginLink = document.getElementById("login-link");
           const registerLink = document.getElementById("register-link");
+          const loginReminder = document.getElementById("login-reminder");
+          const knowledgeGraphContainer = document.getElementById("knowledge-graph-container");
+          const searchContainer = document.querySelector(".search-container");
 
           if (userInfoStr) {
             // 解析用户信息
@@ -259,12 +278,18 @@
             logoutLink.style.display = "block";
             loginLink.style.display = "none";
             registerLink.style.display = "none";
+            loginReminder.style.display = "none";
+            knowledgeGraphContainer.style.display = "block";
+            searchContainer.style.display = "flex";
           } else {
             // 用户未登录
             userInfo.style.display = "none";
             logoutLink.style.display = "none";
             loginLink.style.display = "block";
             registerLink.style.display = "block";
+            loginReminder.style.display = "block";
+            knowledgeGraphContainer.style.display = "none";
+            searchContainer.style.display = "none";
           }
         } catch (error) {
           console.error("检查登录状态失败:", error);
@@ -634,7 +659,7 @@
 
       // 从JSON文件加载数据
       async function loadDataFromJson() {
-        const jsonFilePath = "./data/neo4j_query_table_data_2025-12-27.json";
+        const jsonFilePath = "./data/neo4j_query_table_data_2026-1-2.json";
         showStatus(`正在加载数据文件: ${jsonFilePath}...`, "warning");
 
         try {
