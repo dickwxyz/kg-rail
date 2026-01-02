@@ -522,7 +522,7 @@
           console.log("用户ID:", currentUser.id);
 
           const response = await fetch(
-            `http://127.0.0.1:5500/user-info?userId=${currentUser.id}`
+            `/user-info?userId=${currentUser.id}`
           );
           const data = await response.json();
 
@@ -588,7 +588,7 @@
 
           try {
             const response = await fetch(
-              "http://127.0.0.1:5500/update-user-info",
+              "/update-user-info",
               {
                 method: "POST",
                 headers: {
@@ -620,7 +620,7 @@
         try {
           const queryParams = new URLSearchParams(filters);
           const response = await fetch(
-            `http://127.0.0.1:5500/students?${queryParams}`
+            `/students?${queryParams}`
           );
           const data = await response.json();
 
@@ -663,7 +663,7 @@
         try {
           // 加载课程名称选项
           const lessonResponse = await fetch(
-            "http://127.0.0.1:5500/student-filter-options?field=lesson"
+            "/student-filter-options?field=lesson"
           );
           const lessonData = await lessonResponse.json();
           if (lessonData.success) {
@@ -672,7 +672,7 @@
 
           // 加载年级选项
           const gradeResponse = await fetch(
-            "http://127.0.0.1:5500/student-filter-options?field=grade"
+            "/student-filter-options?field=grade"
           );
           const gradeData = await gradeResponse.json();
           if (gradeData.success) {
@@ -681,7 +681,7 @@
 
           // 加载授课教师选项
           const teacherResponse = await fetch(
-            "http://127.0.0.1:5500/student-filter-options?field=teacher"
+            "/student-filter-options?field=teacher"
           );
           const teacherData = await teacherResponse.json();
           if (teacherData.success) {
