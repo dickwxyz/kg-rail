@@ -431,6 +431,11 @@
 
     <!-- 页面内容 -->
     <div class="container">
+      <!-- 登录提示 -->
+      <div id="login-reminder" class="card" style="display: none;">
+        <p>请先<a href="./login.html">登录</a>后查看课程资源。</p>
+      </div>
+
       <!-- 资源使用说明 -->
       <section id="resource-intro" class="card">
         <h2>资源使用说明</h2>
@@ -1482,6 +1487,8 @@
             const logoutLink = document.getElementById("logout-link");
             const loginLink = document.getElementById("login-link");
             const registerLink = document.getElementById("register-link");
+            const loginReminder = document.getElementById("login-reminder");
+            const resourceSections = document.querySelectorAll('.container section');
 
             if (userInfoStr) {
               // 解析用户信息
@@ -1495,12 +1502,24 @@
               logoutLink.style.display = "block";
               loginLink.style.display = "none";
               registerLink.style.display = "none";
+              loginReminder.style.display = "none";
+
+              // 显示所有资源部分
+              resourceSections.forEach(section => {
+                section.style.display = "block";
+              });
             } else {
               // 用户未登录
               userInfo.style.display = "none";
               logoutLink.style.display = "none";
               loginLink.style.display = "block";
               registerLink.style.display = "block";
+              loginReminder.style.display = "block";
+
+              // 隐藏所有资源部分
+              resourceSections.forEach(section => {
+                section.style.display = "none";
+              });
             }
           } catch (error) {
             console.error("检查登录状态失败:", error);

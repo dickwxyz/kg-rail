@@ -218,6 +218,14 @@
         /* 加载动画 */
         .typing-indicator { font-style: italic; color: #888; font-size: 0.8rem; margin-left: 50px; display: none; }
 
+        /* 卡片式布局 */
+        .card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
     </style>
     <!-- 引入 Markdown-It 与任务列表插件 -->
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
@@ -266,6 +274,11 @@
             <li><a href="./register.html" id="register-link">注册</a></li>
         </ul>
     </nav>
+
+    <!-- 登录提示 -->
+    <div id="login-reminder" class="card" style="display: none; margin: 20px; position: relative; z-index: 100;">
+        <p>请先<a href="./login.html">登录</a>后使用AI问答功能。</p>
+    </div>
 
     <!-- 主内容区 -->
     <div class="qa-container">
@@ -354,6 +367,8 @@
             const logoutLink = document.getElementById("logout-link");
             const loginLink = document.getElementById("login-link");
             const registerLink = document.getElementById("register-link");
+            const loginReminder = document.getElementById("login-reminder");
+            const qaContainer = document.querySelector(".qa-container");
 
             if (userInfoStr) {
                 const user = JSON.parse(userInfoStr);
@@ -362,11 +377,15 @@
                 logoutLink.style.display = "block";
                 loginLink.style.display = "none";
                 registerLink.style.display = "none";
+                loginReminder.style.display = "none";
+                qaContainer.style.display = "flex";
             } else {
                 userInfo.style.display = "none";
                 logoutLink.style.display = "none";
                 loginLink.style.display = "block";
                 registerLink.style.display = "block";
+                loginReminder.style.display = "block";
+                qaContainer.style.display = "none";
             }
         }
         function logout() {
