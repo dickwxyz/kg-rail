@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | 课程首页 | `index.html` | 课程简介、课程信息、学习目标、课程大纲、教师简介 |
 | 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的课程知识图谱可视化，支持节点搜索和多种布局 |
-| AI 问答 | `aiqa.html` | 基于 OpenRouter 的多模型问答，支持多话题、Markdown/代码/公式渲染 |
+| AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，支持多话题、Markdown/代码/公式渲染 |
 | 知识测试 | `test.html` | 从题库随机抽题、在线作答、服务端评分并记录答题数据 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
 | 登录 / 注册 | `login.html` / `register.html` | 按学号/工号长度区分学生与教师 |
@@ -25,7 +25,7 @@
 - **数据库**：SQLite3（`user.db`）
 - **前端**：原生 HTML / CSS / JavaScript，无构建流程
 - **可视化**：vis.js 4.21
-- **AI**：OpenRouter API（Gemini 2.5 Flash、DeepSeek R1 0528、DeepSeek V3.2）
+- **AI**：DeepSeek 官方 API，模型 `deepseek-flash`（DeepSeek-V4.1-Flash）
 - **文档渲染**：markdown-it 14 + highlight.js 11 + MathJax 3
 
 ## 快速开始
@@ -54,7 +54,7 @@ PORT=8080 npm start
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 OPENROUTER_API_KEY
+# 编辑 .env，填入 DEEPSEEK_API_KEY
 ```
 
 `.env` 已被 `.gitignore` 排除。服务端读取后通过 `GET /api/config` 提供给页面，`aiqa.html` 加载时自动填入左侧输入框。
@@ -111,7 +111,7 @@ kg-rail/
 | `GET` | `/student-filter-options?field=` | 获取筛选项去重值，`field` 仅允许 `lesson`、`grade`、`teacher` |
 | `GET` | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽取题目（默认 10 题），响应中已剔除 `answer` |
 | `POST` | `/api/submit-test` | 提交答案，服务端评分并将作答记录写入 `answers` 表 |
-| `GET` | `/api/config` | 返回服务端 `.env` 中的 OpenRouter API Key（供 AI 问答页使用） |
+| `GET` | `/api/config` | 返回服务端 `.env` 中的 DeepSeek API Key（供 AI 问答页使用） |
 
 登录响应中的 `role` 为中文：`教师`、`本科生`、`研究生`。前端将 `userInfo`（`id`、`name`、`role`）存入 `localStorage`，服务端不维护会话或 Cookie。
 
@@ -157,13 +157,9 @@ kg-rail/
 
 ## AI 问答配置
 
-`aiqa.html` 直接调用 OpenRouter 的 `chat/completions` 接口，模型可在页面左侧切换：
+`aiqa.html` 直接调用 DeepSeek 官方 `chat/completions` 接口（`https://api.deepseek.com/chat/completions`），模型为 `deepseek-flash`（DeepSeek-V4.1-Flash）。
 
-- `google/gemini-2.5-flash`
-- `deepseek/deepseek-r1-0528`
-- `deepseek/deepseek-v3.2`
-
-密钥保存在服务端 `.env` 的 `OPENROUTER_API_KEY` 中，页面加载时通过 `GET /api/config` 自动填入左侧输入框，也可手动填写。前端源码中不再包含密钥。注意该接口对所有访问者开放，密钥仍可在浏览器网络请求中看到，仅适用于教学场景；生产环境应改为服务端代理调用，浏览器不接触密钥。对话历史仅存在于当前页面会话中，刷新后不保留。
+密钥保存在服务端 `.env` 的 `DEEPSEEK_API_KEY` 中，页面加载时通过 `GET /api/config` 自动填入左侧输入框，也可手动填写。前端源码中不再包含密钥。注意该接口对所有访问者开放，密钥仍可在浏览器网络请求中看到，仅适用于教学场景；生产环境应改为服务端代理调用，浏览器不接触密钥。对话历史仅存在于当前页面会话中，刷新后不保留。
 
 系统提示词：`你是轨道交通领域的专家，能够回答相关专业性问题，语言能够体现专业性和逻辑性。`
 

@@ -12,7 +12,7 @@
 - **数据库**：SQLite3（`user.db`），通过 `sqlite3` 包的 `db.get` / `db.run` / `db.all` 访问
 - **前端**：原生 HTML/CSS/JavaScript，无构建流程、无打包器，文件由 Express 直接托管
 - **图谱可视化**：vis.js 4.21（CDN 引入）
-- **AI**：OpenRouter API，模型为 Gemini 2.5 Flash、DeepSeek R1 0528、DeepSeek V3.2
+- **AI**：DeepSeek 官方 API（`https://api.deepseek.com`），模型为 `deepseek-flash`（DeepSeek-V4.1-Flash）
 - **文档渲染**：markdown-it 14、highlight.js 11、MathJax 3（均为 CDN 引入）
 
 ## 命令
@@ -46,7 +46,7 @@ curl -s -X POST http://localhost:5599/login \
 
 单文件服务，按顺序为：数据库初始化 → CORS/静态中间件 → 注册 → 登录 → 用户信息 → 学生查询 → 测试题目 → 提交测试 → 错误处理 → 启动监听。
 
-- 环境变量：启动时用内置的 `loadEnvFile()` 读取项目根目录 `.env`（零依赖，不覆盖已有环境变量），主要用于 `OPENROUTER_API_KEY`
+- 环境变量：启动时用内置的 `loadEnvFile()` 读取项目根目录 `.env`（零依赖，不覆盖已有环境变量），主要用于 `DEEPSEEK_API_KEY`
 - 静态安全：`express.static` 之前有拦截中间件，拒绝 `.db/.sqlite`、`.env*`、`.git/`、`.claude/`、`.vscode/`、`server.js`、`package(-lock).json`、`node_modules/`，命中返回 404
 - 静态文件：`app.use(express.static(__dirname))`，以项目根目录为静态目录
 - 监听：`app.listen(port, "0.0.0.0")`，支持局域网访问
@@ -64,7 +64,7 @@ curl -s -X POST http://localhost:5599/login \
 | GET | `/student-filter-options?field=` | 筛选项去重值；`field` 白名单为 `lesson`/`grade`/`teacher` |
 | GET | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽题，默认 10 题，响应剔除 `answer` |
 | POST | `/api/submit-test` | 服务端评分，并按题目逐条写入 `answers` 表 |
-| GET | `/api/config` | 返回 `.env` 中的 `OPENROUTER_API_KEY`，供 AI 问答页自动填入 |
+| GET | `/api/config` | 返回 `.env` 中的 `DEEPSEEK_API_KEY`、`DEEPSEEK_API_BASE_URL` 和 `DEEPSEEK_MODEL`，供 AI 问答页使用 |
 
 注册时按前端提交的 `userType`（`student`/`teacher`）与 ID 长度共同判定表名；登录时仅按 ID 长度判定。登录返回的 `role` 为中文「教师」「本科生」「研究生」，前端用户中心依赖该值切换侧边栏。
 
@@ -140,11 +140,11 @@ curl -s -X POST http://localhost:5599/login \
 - 中文内容与注释为项目惯例，新增文档和注释默认使用中文
 - `resources/`、`user.db`、`.env`、`node_modules/` 均不纳入版本库，不要提交；新增密钥一律写入 `.env` 并同步更新 `.env.example`
 
-## 安全考虑（均为未修复状态）
+## 安全考虑
 
 - **静态目录暴露**：已用拦截中间件修复（`/user.db`、`.env`、`server.js` 等实测返回 404）；静态服务根目录仍是项目根，新增敏感文件时需同步加入 `isBlockedStaticPath()`，更彻底的做法是拆分 `public/` 目录
 - **密码明文**：数据库中明文存储、明文比对，应改为 bcrypt 等加盐哈希
-- **OpenRouter Key 下发**：密钥已从源码移入 `.env`，经 `/api/config` 明文返回给任何访问者，仅适用于教学场景；生产环境应改为服务端代理
+- **DeepSeek Key 下发**：密钥已从源码移入 `.env`，经 `/api/config` 明文返回给任何访问者，仅适用于教学场景；生产环境应改为服务端代理
 - **CORS 全开放**：`origin: "*"`，任意来源可调用接口
 - **无鉴权**：接口只信任请求中的 `userId`，可越权读取或修改他人资料；`/user-info` 还会返回密码字段
 - **SQL 拼接**：表名与字段名由长度判定或白名单控制，值均使用参数化占位符；新增动态 SQL 时保持白名单 + 参数化
