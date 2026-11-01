@@ -287,11 +287,10 @@
             <div class="sidebar-section">
                 <h3>基本设置</h3>
                 <div class="setting-item">
-                    <label>OpenRouter API Key</label>
-                    <!-- 安全提示：请勿在仓库中保留真实密钥；建议运行时从本地环境、安全存储或浏览器本地存储加载。 -->
-                    <!-- 默认填入你提供的 Key -->
-                    <input type="password" id="api-key" 
-                           value="REDACTED">
+                    <label>DeepSeek API Key</label>
+                    <!-- 密钥保存在服务端 .env（OPENROUTER_API_KEY），页面加载时从 /api/config 获取；也可手动填写 -->
+                    <input type="password" id="api-key"
+                           placeholder="由服务端 .env 提供，也可手动填写" autocomplete="off">
                 </div>
             </div>
 
@@ -332,9 +331,7 @@
                     
                     <!-- 模型选择下拉菜单 -->
                     <select class="model-select" id="model-select">
-                        <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
-                        <option value="deepseek/deepseek-r1-0528">DeepSeek R1 0528</option>
-                        <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
+                        <option value="deepseek-flash">DeepSeek Flash (V4.1)</option>
                     </select>
 
                     <button class="tool-btn" id="quick-prompts-btn" onclick="toggleQuickPrompts()">常用提示词</button>
@@ -392,7 +389,23 @@
             localStorage.removeItem("userInfo");
             window.location.reload();
         }
-        window.onload = checkLogin;
+        window.onload = function () {
+            checkLogin();
+            loadApiConfig();
+        };
+
+        // 从服务端读取 DeepSeek 配置（密钥保存在 .env，不写入前端源码）
+        async function loadApiConfig() {
+            try {
+                const response = await fetch("/api/config");
+                const data = await response.json();
+                if (data.success && data.apiKey) {
+                    document.getElementById("api-key").value = data.apiKey;
+                }
+            } catch (error) {
+                console.warn("读取服务端 API 配置失败，请在左侧手动填写 API Key", error);
+            }
+        }
 
         // --- 2. AI 问答逻辑 ---
         
@@ -589,12 +602,10 @@
             typingIndicator.style.display = 'block';
             try {
                 const messages = conversationHistory.slice(0, idx);
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                const response = await fetch("https://api.deepseek.com/chat/completions", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
-                        "HTTP-Referer": window.location.href,
-                        "X-Title": "RailTransitCourse",
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({ model, messages })
@@ -680,7 +691,7 @@
             chatLog.scrollTop = chatLog.scrollHeight; // 滚动到底部
             return msgDiv;
         }
-        // 发送消息流程：读取输入→校验密钥→维护上下文→调用 OpenRouter→渲染回复
+        // 发送消息流程：读取输入→校验密钥→维护上下文→调用 DeepSeek→渲染回复
         // 发送消息主函数
         async function sendMessage() {
             const text = userInput.value.trim();
@@ -707,13 +718,11 @@
             
 
             try {
-                // 3. 调用 OpenRouter API
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                // 3. 调用 DeepSeek API
+                const response = await fetch("https://api.deepseek.com/chat/completions", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${apiKey}`,
-                        "HTTP-Referer": window.location.href, // OpenRouter 要求
-                        "X-Title": "RailTransitCourse", // OpenRouter 要求
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({

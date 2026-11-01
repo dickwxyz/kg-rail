@@ -1,10 +1,36 @@
 // 应用：用户注册/登录 API 服务（Express + SQLite）
 // 结构：数据库初始化 / 中间件与跨域 / 注册接口 / 登录接口 / 辅助函数 / 启动服务
-const express = require("express");   
-const bodyParser = require("body-parser");    
-const sqlite3 = require("sqlite3").verbose();   
-const cors = require("cors"); // 引入 CORS    
-const app = express();    
+const express = require("express");
+const bodyParser = require("body-parser");
+const sqlite3 = require("sqlite3").verbose();
+const cors = require("cors"); // 引入 CORS
+const fs = require("fs");
+const path = require("path");
+
+// 读取项目根目录的 .env（零依赖实现，不覆盖已存在的环境变量）
+function loadEnvFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    content.split(/\r?\n/).forEach((line) => {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (!match) return;
+      const key = match[1];
+      let value = (match[2] || "").trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    });
+  } catch (err) {
+    if (err.code !== "ENOENT") console.warn("读取 .env 失败:", err.message);
+  }
+}
+loadEnvFile(path.join(__dirname, ".env"));
+
+const app = express();
 const port = parseInt(process.env.PORT || "5500", 10);    
 
 process.on('unhandledRejection', (reason) => {
@@ -29,7 +55,46 @@ app.use(
   })
 );
 app.use(bodyParser.json());
+
+// 静态资源安全策略：禁止通过静态服务下载数据库、环境变量、服务端源码和配置目录
+function isBlockedStaticPath(pathname) {
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch (e) {
+    return true; // 无法解码的路径一律拒绝
+  }
+  return (
+    /\.(db|sqlite|sqlite3)(-wal|-shm|-journal)?$/i.test(decoded) ||
+    /(^|\/)\.env(\.|$)/i.test(decoded) ||
+    /(^|\/)\.git(\/|$)/i.test(decoded) ||
+    /(^|\/)\.claude(\/|$)/i.test(decoded) ||
+    /(^|\/)\.vscode(\/|$)/i.test(decoded) ||
+    /^\/server\.js$/i.test(decoded) ||
+    /^\/package(-lock)?\.json$/i.test(decoded) ||
+    /^\/node_modules(\/|$)/i.test(decoded)
+  );
+}
+
+app.use((req, res, next) => {
+  if (isBlockedStaticPath(req.path)) {
+    return res.status(404).json({ success: false, message: "资源不存在！" });
+  }
+  next();
+});
+
 app.use(express.static(__dirname)); // 静态文件服务
+
+// AI 配置接口：密钥只保存在服务端 .env，前端按需获取
+// 注意：接口对任何访问者可见，密钥仍会出现在浏览器网络中，仅适用于教学场景
+app.get("/api/config", (req, res) => {
+  res.status(200).json({
+    success: true,
+    apiKey: process.env.DEEPSEEK_API_KEY || "",
+    apiBaseUrl: process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com",
+    model: process.env.DEEPSEEK_MODEL || "deepseek-flash",
+  });
+});
 // 预检请求处理（符合跨域场景的浏览器预检）
 // 为所有路由处理预检请求
 app.options("*", (req, res) => {
