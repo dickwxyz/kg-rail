@@ -139,6 +139,13 @@
             <div class="register-top-grid">
               <h3>用户登录</h3>
               <div class="input">
+                <span>身份</span>
+                <select id="roleSelect" class="input-text">
+                  <option value="student">学生</option>
+                  <option value="teacher">教师</option>
+                </select>
+              </div>
+              <div class="input">
                 <span>学号/工号 <label style="color: red">* </label></span>
                 <input
                   id="userId"
@@ -178,6 +185,22 @@
     </div>
     <!-- 页面脚本：登录流程（校验→请求→本地存储→跳转） -->
     <script>
+      // ========================================
+      // 身份切换：选择教师时自动填入测试教师工号
+      // ========================================
+      const DEFAULT_TEACHER_ID = "1234"; // 测试123
+      const roleSelect = document.getElementById("roleSelect");
+      const userIdInput = document.getElementById("userId");
+
+      roleSelect.addEventListener("change", function () {
+        if (this.value === "teacher") {
+          userIdInput.value = DEFAULT_TEACHER_ID;
+        } else if (userIdInput.value === DEFAULT_TEACHER_ID) {
+          // 切回学生时清空自动填入的工号
+          userIdInput.value = "";
+        }
+      });
+
       // ========================================
       // 登录表单提交处理逻辑
       // ========================================
