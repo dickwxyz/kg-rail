@@ -97,7 +97,7 @@ curl -s -X POST http://localhost:5599/login \
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
 - **knowledge-graph.html**：知识图谱。登录后加载 `./data/neo4j_query_table_data_2026-1-2.json`，转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
 - **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥
-- **test.html**：知识测试。登录后加载题目，作答状态缓存于 `localStorage`，提交后由 `/api/submit-test` 评分
+- **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
 - **user-center.html**：个人信息编辑；学生显示「学情检测」（开发中），教师显示「学生信息」筛选表格与「教学建议」（开发中）
 

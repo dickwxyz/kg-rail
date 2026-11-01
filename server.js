@@ -83,6 +83,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// 知识测试功能暂未开放：直接访问测试页时重定向到首页
+// 必须在 express.static 之前；先解码路径，避免 /%74est.html 之类的编码绕过
+app.use((req, res, next) => {
+  let pathname = req.path;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch (e) {
+    return res.redirect(302, "/index.html");
+  }
+  if (/^\/test\.html\/?$/i.test(pathname)) {
+    res.set("Cache-Control", "no-store");
+    return res.redirect(302, "/index.html");
+  }
+  next();
+});
+
 app.use(express.static(__dirname)); // 静态文件服务
 
 // AI 配置接口：密钥只保存在服务端 .env，前端按需获取
