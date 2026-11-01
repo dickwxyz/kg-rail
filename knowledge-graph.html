@@ -165,7 +165,7 @@
         top: 54px; /* 导航栏高度 */
         left: 0;
         right: 0;
-        bottom: 0;
+        bottom: 56px; /* 为底部页脚留出空间 */
         width: 100%;
         background-color: #f9f9f9;
       }
@@ -197,7 +197,37 @@
           top: 60px;
         }
       }
-    </style>
+    
+      /* 页脚 */
+      footer {
+        text-align: center;
+        padding: 16px 20px;
+        margin-top: 20px;
+        color: #7f8c8d;
+        font-size: 0.85rem;
+        background-color: #f9f9f9;
+        border-top: 1px solid #e0e0e0;
+        flex-shrink: 0;
+      }
+      footer .qa-link {
+        color: #2c3e50;
+        text-decoration: none;
+      }
+      footer .qa-link:hover {
+        color: #2980b9;
+        text-decoration: underline;
+      }
+
+      /* 知识图谱页：页脚固定在底部，避免被绝对定位的图谱容器遮挡 */
+      footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+        margin-top: 0;
+      }
+</style>
   </head>
   <body>
     <!-- 导航栏 -->
@@ -1029,5 +1059,9 @@
         });
       };
     </script>
-  </body>
+  
+        <footer>
+            <p>© 2026 <a href="https://dickwxyz.github.io/resume" class="qa-link" target="_blank" rel="noopener">钱晨</a> 上海应用技术大学 · 保留所有权利</p>
+        </footer>
+</body>
 </html>
