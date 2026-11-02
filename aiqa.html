@@ -271,8 +271,7 @@
         };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
-    <!-- 让 markdown-it 识别数学表达式并交由 MathJax 渲染 -->
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it-mathjax3@1.1.0/dist/markdown-it-mathjax3.min.js"></script>
+    <!-- 数学公式先统一为 $ / $$ 定界符，渲染完成后由 MathJax 统一排版 -->
 </head>
 <body>
 
@@ -439,19 +438,36 @@
         // 存储对话上下文
         let conversationHistory = [];
 
+        // 统一公式定界符：\[...\] → $$...$$，\(...\) → $...$
+        // 必须在 Markdown 渲染前处理，否则反斜杠会被 Markdown 转义掉
+        function normalizeMathDelimiters(md) {
+            // 先保护代码块和行内代码，避免替换其中的 LaTeX 源码
+            const codeSegments = [];
+            let text = md.replace(/```[\s\S]*?```|`[^`\n]*`/g, (segment) => {
+                codeSegments.push(segment);
+                return `\u0000CODE${codeSegments.length - 1}\u0000`;
+            });
+
+            text = text
+                .replace(/\\\[([\s\S]*?)\\\]/g, (_, formula) => `$$${formula}$$`)
+                .replace(/\\\(([\s\S]*?)\\\)/g, (_, formula) => `$${formula}$`);
+
+            return text.replace(/\u0000CODE(\d+)\u0000/g, (_, index) => codeSegments[Number(index)]);
+        }
+
         // 渲染 Markdown 文本
         function renderMarkdown(md) {
+            const text = normalizeMathDelimiters(md);
             if (window.markdownit) {
                 if (!window.mdParser) {
                     const parser = window.markdownit({ html: true, linkify: true, typographer: true });
-                    if (window.markdownitMathjax3) parser.use(window.markdownitMathjax3);
                     if (window.markdownitTaskLists) parser.use(window.markdownitTaskLists, { enabled: true, label: true });
                     window.mdParser = parser;
                 }
-                return window.mdParser.render(md);
+                return window.mdParser.render(text);
             }
             const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            let t = esc(md);
+            let t = esc(text);
             t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
             t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${esc(c)}</code>`);
@@ -511,16 +527,17 @@
         }
         // 代码块与公式增强：MathJax 排版、highlight.js 高亮、折叠/复制工具栏
         function enhanceAIBubble(bubble) {
-            const typeset = () => {
+            const typeset = (attempt = 0) => {
                 if (window.MathJax && MathJax.typesetPromise) {
                     MathJax.typesetPromise([bubble]).catch(err => console.error(err));
-                    return true;
+                    return;
                 }
-                return false;
+                // MathJax 为异步加载，慢网络下可能尚未就绪；每 500ms 重试，最多约 20 秒
+                if (attempt < 40) {
+                    setTimeout(() => typeset(attempt + 1), 500);
+                }
             };
-            if (!typeset()) {
-                setTimeout(typeset, 300);
-            }
+            typeset();
 
             const highlight = () => {
                 if (window.hljs) {
