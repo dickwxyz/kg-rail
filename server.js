@@ -570,6 +570,73 @@ function findGraphLabelsInText(text) {
   return hits.slice(0, 10).map((hit) => hit.node);
 }
 
+// 常见课程提问与图谱节点标签不一致时的同义词映射
+const COURSE_GRAPH_SYNONYMS = [
+  { pattern: /类型|分类|种类/, labels: ["地铁系统", "轻轨系统", "单轨系统", "磁浮系统", "有轨电车系统", "自动导向轨道系统", "市域快速轨道系统"] },
+  { pattern: /上线车组|运用车|配车数/, labels: ["车辆车组和列车"] },
+  { pattern: /断面客流|客流量/, labels: ["客流空间分布", "客流特性分析"] },
+  { pattern: /客流预测/, labels: ["客流特性分析", "客流时间分布", "客流空间分布"] },
+  { pattern: /票价|票制/, labels: ["票价制定方法", "票制票价和票种"] },
+  { pattern: /运能|运输能力/, labels: ["输送能力", "通过能力", "运输能力加强措施"] },
+  { pattern: /行车间隔|发车频率/, labels: ["发车间隔"] },
+  { pattern: /信号|CBTC|ATC/, labels: ["列车自动控制系统", "列车自动防护系统", "列车自动监控系统", "列车自动驾驶系统", "ATC控制模式和驾驶模式"] },
+  { pattern: /无人驾驶|全自动运行|自动驾驶/, labels: ["列车自动驾驶系统", "ATC控制模式和驾驶模式"] },
+  { pattern: /调度/, labels: ["运营调度控制中心", "调度组织模式"] },
+  { pattern: /乘务|司机/, labels: ["乘务计划"] },
+  { pattern: /维修|故障/, labels: ["维修理论与方法", "固定设备维修管理", "车辆设备维修管理"] },
+  { pattern: /大客流|高峰客流/, labels: ["日常大客流和突发事件客流组织"] },
+  { pattern: /PPP|特许经营|投融资|公私合营/, labels: ["城市轨道交通政策和经营模式", "经营管理模式分类"] },
+];
+
+// 模糊匹配时忽略的通用词，避免只因为“方法”“系统”就命中无关节点
+const FUZZY_STOPWORDS = new Set([
+  "什么", "怎么", "如何", "哪些", "哪个", "包括", "关系", "区别", "计算",
+  "方法", "系统", "管理", "运营", "城市", "轨道", "交通", "特征", "模式",
+  "内容", "基本", "主要", "可以", "需要", "分析", "提高", "进行",
+]);
+
+// 最长公共子串：返回实际匹配到的文本
+function longestCommonSubstring(a, b) {
+  if (!a || !b) return "";
+  const dp = new Array(b.length + 1).fill(0);
+  let bestLength = 0;
+  let bestEnd = 0;
+  for (let i = 1; i <= a.length; i++) {
+    let prev = 0;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = dp[j];
+      if (a[i - 1] === b[j - 1]) {
+        dp[j] = prev + 1;
+        if (dp[j] > bestLength) {
+          bestLength = dp[j];
+          bestEnd = i;
+        }
+      } else {
+        dp[j] = 0;
+      }
+      prev = temp;
+    }
+  }
+  return bestLength > 0 ? a.slice(bestEnd - bestLength, bestEnd) : "";
+}
+
+// 模糊匹配：处理“行车间隔→发车间隔”“上线车组数→车辆车组和列车”等情况
+function findGraphNodesFuzzy(text) {
+  const source = normalizeGraphLabel(text);
+  if (!source) return [];
+  const ranked = [];
+  GRAPH_NODES.forEach((node) => {
+    const label = normalizeGraphLabel(node.label);
+    if (!label || label.length < 2) return;
+    const common = longestCommonSubstring(label, source);
+    if (common.length < 2 || FUZZY_STOPWORDS.has(common)) return;
+    const coverage = common.length / label.length;
+    ranked.push({ node, score: common.length * 10 + coverage * 20 });
+  });
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked.slice(0, 4).map((item) => item.node);
+}
+
 function buildGraphEvidence(explicitLabels, answer, question, preferredNodes) {
   const chosen = [];
   const seen = new Set();
@@ -713,16 +780,33 @@ function runGraphifyQuery(queryText, dir, graphPath) {
 // 从问题中找出图谱节点作为查询词，逐个检索并合并上下文
 async function collectGraphContext(question) {
   const { dir, graphPath } = getGraphAskDir();
-  const seeds = findGraphLabelsInText(question).slice(0, 6);
+  const seeds = [];
+  const seenSeeds = new Set();
+  const addSeed = (node) => {
+    if (node && !seenSeeds.has(node.id) && seeds.length < 8) {
+      seenSeeds.add(node.id);
+      seeds.push(node);
+    }
+  };
 
-  // 问题中没有直接命中节点时，用 graphify query 做一次节点发现
+  // 1. 课程常见同义词；2. 问题中直接出现的节点标签；3. 模糊匹配
+  COURSE_GRAPH_SYNONYMS.forEach((rule) => {
+    if (!rule.pattern.test(question)) return;
+    rule.labels.forEach((label) => addSeed(findGraphNode(label)));
+  });
+  findGraphLabelsInText(question).forEach(addSeed);
+  // 已有足够明确的节点时不再模糊匹配，避免“城市轨道交通”这类公共前缀带出无关文档
+  if (seeds.length < 3) {
+    findGraphNodesFuzzy(question).forEach(addSeed);
+  }
+
+  // 仍然没有命中时，用 graphify query 做一次节点发现
   if (seeds.length === 0) {
     const output = await runGraphifyQuery(question, dir, graphPath);
     output.split(/\r?\n/).forEach((line) => {
       const match = line.match(/^\s*NODE\s+(.+?)\s+\[src=/);
       if (!match) return;
-      const node = findGraphNode(match[1].trim());
-      if (node && !seeds.some((item) => item.id === node.id)) seeds.push(node);
+      addSeed(findGraphNode(match[1].trim()));
     });
   }
 
