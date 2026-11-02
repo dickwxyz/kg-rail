@@ -120,18 +120,6 @@
         background-color: #34495e;
       }
 
-      .layout-container {
-        margin-top: 10px;
-      }
-
-      .layout-container select {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 12px;
-      }
-
       /* 状态信息 */
       .status-message {
         margin-top: 10px;
@@ -281,18 +269,6 @@
       <input type="text" id="search-node" placeholder="搜索知识节点..." />
       <button id="search-button">搜索</button>
 
-      <!-- 布局选择区域 -->
-      <div class="layout-container">
-        <label for="layout-select">布局</label>
-        <select id="layout-select">
-          <option value="hierarchical">层次结构</option>
-          <option value="forceAtlas2">力导向(ForceAtlas2)</option>
-          <option value="barnesHut">Barnes-Hut</option>
-          <option value="repulsion" selected>排斥布局</option>
-          <option value="none">无物理(静态)</option>
-        </select>
-      </div>
-
       <!-- 状态信息 -->
       <div id="status-message" class="status-message"></div>
 
@@ -365,8 +341,6 @@
 
       // 全局变量
       let graphNetwork = null;
-      let physicsFrozen = false;
-
       // 获取当前网络
       function getCurrentNetwork() {
         return graphNetwork;
@@ -399,261 +373,6 @@
           );
         } catch (error) {
           console.error("设置网络属性时出错:", error);
-        }
-      }
-
-      // 应用布局预设
-      function applyLayoutPreset(preset) {
-        const network = getCurrentNetwork();
-        if (!network) return;
-
-        physicsFrozen = false;
-        let options = {};
-
-        if (preset === "hierarchical") {
-          options = {
-            layout: {
-              hierarchical: {
-                enabled: true,
-                direction: "LR",
-                sortMethod: "hubsize",
-                nodeSpacing: 120,
-                levelSeparation: 180
-              }
-            },
-            physics: {
-              enabled: true,
-              solver: "hierarchicalRepulsion",
-              hierarchicalRepulsion: {
-                nodeDistance: 170,
-                springLength: 120,
-                springConstant: 0.01,
-                damping: 0.9
-              },
-              minVelocity: 0.75,
-              stabilization: {
-                enabled: true,
-                iterations: 300,
-                updateInterval: 50
-              }
-            }
-          };
-        } else if (preset === "forceAtlas2") {
-          options = {
-            layout: {
-              improvedLayout: true,
-              hierarchical: { enabled: false }
-            },
-            physics: {
-              enabled: true,
-              solver: "forceAtlas2Based",
-              forceAtlas2Based: {
-                gravitationalConstant: -150,
-                centralGravity: 0.12,
-                springLength: 160,
-                springConstant: 0.04,
-                damping: 0.9,
-                avoidOverlap: 0.8
-              },
-              minVelocity: 0.75,
-              stabilization: {
-                enabled: true,
-                iterations: 800,
-                updateInterval: 100
-              }
-            }
-          };
-        } else if (preset === "barnesHut") {
-          options = {
-            layout: { hierarchical: { enabled: false } },
-            physics: {
-              enabled: true,
-              solver: "barnesHut",
-              barnesHut: {
-                gravitationalConstant: -1200,
-                centralGravity: 0.35,
-                springLength: 130,
-                springConstant: 0.05,
-                damping: 0.9,
-                avoidOverlap: 0.8
-              },
-              minVelocity: 0.75,
-              stabilization: {
-                enabled: true,
-                iterations: 600,
-                updateInterval: 80
-              }
-            }
-          };
-        } else if (preset === "repulsion") {
-          options = {
-            layout: { hierarchical: { enabled: false } },
-            physics: {
-              enabled: true,
-              solver: "repulsion",
-              repulsion: {
-                nodeDistance: 120,
-                springLength: 110,
-                springConstant: 0.07,
-                centralGravity: 0.25,
-                damping: 0.9
-              },
-              minVelocity: 0.7,
-              stabilization: {
-                enabled: true,
-                iterations: 600,
-                updateInterval: 80
-              }
-            }
-          };
-        } else if (preset === "none") {
-          options = {
-            layout: { hierarchical: { enabled: false } },
-            physics: { enabled: false, stabilization: false }
-          };
-        }
-
-        try {
-          network.setOptions(options);
-        } catch (err) {
-          console.error("应用布局预设时出错:", err);
-        }
-
-        if (preset !== "none") {
-          setPhysicsAutoFreeze(network, { enable: true });
-        }
-        setupNetwork(network);
-      }
-
-      // 设置拖拽监听器
-      function setupDragListeners(network) {
-        if (!network) return;
-
-        let draggedNode = null;
-        let linkedNodes = null;
-        let originalPositions = {};
-        let isDragging = false;
-
-        network.on("dragStart", params => {
-          if (params.nodes && params.nodes.length > 0) {
-            draggedNode = params.nodes[0];
-            isDragging = true;
-
-            // 获取与被拖拽节点直接相连的节点
-            linkedNodes = network.getConnectedNodes(draggedNode);
-
-            // 保存原始位置
-            originalPositions = {};
-            linkedNodes.forEach(nodeId => {
-              const nodePosition = network.getPositions([nodeId])[nodeId];
-              originalPositions[nodeId] = { ...nodePosition };
-            });
-
-            // 获取被拖拽节点的初始位置
-            const dragNodePos = network.getPositions([draggedNode])[draggedNode];
-            originalPositions[draggedNode] = { ...dragNodePos };
-          }
-        });
-
-        network.on("dragging", params => {
-          if (isDragging && draggedNode && linkedNodes && linkedNodes.length > 0) {
-            // 获取被拖拽节点的当前位置
-            const positions = network.getPositions([draggedNode]);
-            const currentPos = positions[draggedNode];
-            const originalPos = originalPositions[draggedNode];
-
-            // 计算位移向量
-            const dx = currentPos.x - originalPos.x;
-            const dy = currentPos.y - originalPos.y;
-
-            // 移动关联节点（跟随主节点移动，但位移较小）
-            linkedNodes.forEach(nodeId => {
-              if (originalPositions[nodeId]) {
-                const origPos = originalPositions[nodeId];
-                // 关联节点移动的比例（这里是50%的跟随移动）
-                const followRatio = 0.5;
-                network.moveNode(nodeId,
-                  origPos.x + dx * followRatio,
-                  origPos.y + dy * followRatio
-                );
-              }
-            });
-          }
-        });
-
-        network.on("dragEnd", params => {
-          draggedNode = null;
-          linkedNodes = null;
-          originalPositions = {};
-          isDragging = false;
-        });
-      }
-
-      // 设置物理引擎自动冻结
-      function setPhysicsAutoFreeze(network, { enable = true, stabilizeIterations = 800, maxWaitMs = 2000 } = {}) {
-        if (physicsFrozen) {
-          if (!network) {
-            network = getCurrentNetwork();
-          }
-          if (!network) return;
-
-          try {
-            network.setOptions({ physics: { enabled: false, stabilization: false } });
-          } catch (err) {
-            console.error("设置物理引擎选项时出错:", err);
-          }
-          return;
-        }
-
-        if (!network) {
-          network = getCurrentNetwork();
-        }
-        if (!network) return;
-
-        const freeze = function() {
-          physicsFrozen = true;
-          try {
-            if (typeof network.stopSimulation === "function") network.stopSimulation();
-          } catch (err) {
-            console.error("停止物理模拟时出错:", err);
-          }
-
-          try {
-            network.setOptions({ physics: { enabled: false, stabilization: false } });
-          } catch (err) {
-            console.error("禁用物理引擎时出错:", err);
-          }
-
-          // 设置拖拽监听器
-          setupDragListeners(network);
-        };
-
-        if (enable) {
-          try {
-            network.setOptions({ physics: { enabled: true } });
-          } catch (err) {
-            console.error("启用物理引擎时出错:", err);
-          }
-
-          try {
-            network.stabilize(stabilizeIterations);
-          } catch (err) {
-            console.error("稳定化网络时出错:", err);
-          }
-
-          window.setTimeout(freeze, Math.max(500, maxWaitMs));
-        }
-
-        try {
-          network.once("stabilizationIterationsDone", freeze);
-        } catch (err) {
-          console.error("设置稳定化完成监听器时出错:", err);
-        }
-
-        try {
-          network.once("stabilized", freeze);
-        } catch (err) {
-          console.error("设置稳定化监听器时出错:", err);
         }
       }
 
@@ -939,15 +658,14 @@
             enabled: true,
             solver: "forceAtlas2Based",
             forceAtlas2Based: {
-              gravitationalConstant: -150,
-              centralGravity: 0.12,
-              springLength: 160,
-              springConstant: 0.04,
-              damping: 0.9,
+              gravitationalConstant: -60,
+              centralGravity: 0.005,
+              springLength: 120,
+              springConstant: 0.08,
+              damping: 0.4,
               avoidOverlap: 0.8
             },
-            minVelocity: 0.5,
-            stabilization: { enabled: true, iterations: 800, updateInterval: 50, fit: true }
+            stabilization: { enabled: true, iterations: 200, fit: true }
           },
           interaction: {
             hover: true,
@@ -962,16 +680,11 @@
         // 创建网络
         graphNetwork = new vis.Network(container, { nodes, edges }, options);
 
-        // 应用各种网络设置和优化
-        setPhysicsAutoFreeze(graphNetwork, { enable: true, maxWaitMs: 3000 });
+        // 稳定化完成后关闭物理引擎（graph.html 原生行为）
+        graphNetwork.once("stabilizationIterationsDone", () => {
+          graphNetwork.setOptions({ physics: { enabled: false } });
+        });
         setupNetwork(graphNetwork);
-        setupDragListeners(graphNetwork);
-
-        // 应用选择的布局预设
-        const layoutSelectEl = document.getElementById("layout-select");
-        if (layoutSelectEl) {
-          applyLayoutPreset(layoutSelectEl.value || "repulsion");
-        }
       }
 
       // 搜索节点
@@ -1053,15 +766,6 @@
           const searchText = document.getElementById("search-node").value.trim();
           searchNodes(searchText);
         });
-
-        // 布局选择器事件监听
-        const layoutSelect = document.getElementById("layout-select");
-        if (layoutSelect) {
-          layoutSelect.addEventListener("change", function(e) {
-            const preset = e.target.value;
-            applyLayoutPreset(preset);
-          });
-        }
 
         // 回车键搜索
         document.getElementById("search-node").addEventListener("keypress", function(event) {

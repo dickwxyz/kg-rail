@@ -113,7 +113,7 @@ curl -s -X POST http://localhost:5599/login \
 - 关系：英文 `relation` 经 `RELATION_ZH` 映射为中文显示，未知类型回退英文
 - 渲染：`convertGraphJsonToVisFormat()` 转换为 `{nodes, edges}`；`setupNetwork()` 只补缺失字段，不覆盖转换时生成的样式
 - 视觉编码：按社区着色、`document` 为方框、`concept` 为圆点、INFERRED 边为虚线、无箭头（数据是无向图）
-- 布局选项：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）；物理参数按 85 节点调整
+- 布局：固定使用 graph.html 原生的 `forceAtlas2Based` 力导向（`gravitationalConstant: -60`、`springLength: 120`、`springConstant: 0.08`、`damping: 0.4`）；`stabilization` 200 次后关闭物理引擎；不再提供布局切换
 
 更新图谱时，重新生成后执行 `cp resources/graph-rail/graphify-out/graph.json data/graph.json`，并检查 `COMMUNITY_NAMES`/`COMMUNITY_COLORS`（社区编号可能变化）。
 

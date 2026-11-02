@@ -10,7 +10,7 @@
 | 模块 | 页面 | 说明 |
 | --- | --- | --- |
 | 课程首页 | `index.html` | 课程简介、课程信息、学习目标、课程大纲、教师简介 |
-| 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的 GraphRAG 课程知识图谱可视化，支持节点搜索和多种布局 |
+| 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的 GraphRAG 课程知识图谱可视化，支持节点搜索 |
 | AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，支持多话题、Markdown/代码/公式渲染 |
 | 知识测试（暂未开放） | `test.html` | 导航入口保留，点击仅提示；服务端将直接访问重定向回首页 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
@@ -144,7 +144,7 @@ kg-rail/
 - **关系映射**：graphify 输出的英文关系（contains、related_to 等）在页面上映射为中文
 - **超边**：7 条 hyperedges 不渲染（vis.js 不支持原生超边）
 
-页面提供节点搜索（支持节点名、来源文件、社区、说明）和五种布局：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）。
+页面提供节点搜索（支持节点名、来源文件、社区、说明）。布局固定使用 graph.html 原生的 `forceAtlas2Based` 力导向配置，稳定化完成后自动关闭物理引擎。
 
 更新图谱时，重新生成 `resources/graph-rail/graphify-out/graph.json` 后复制为 `data/graph.json`。`resources/` 不纳入版本库，页面只加载 `data/graph.json`。
 
