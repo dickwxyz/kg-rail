@@ -95,7 +95,7 @@ curl -s -X POST http://localhost:5599/login \
 
 - **index.html**：课程首页，导航栏根据 `localStorage` 显示登录/退出；内容公开
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
-- **knowledge-graph.html**：知识图谱。登录后加载 `./data/neo4j_query_table_data_2026-1-2.json`，转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
+- **knowledge-graph.html**：知识图谱。登录后加载 `./data/graph.json`（GraphRAG 输出），转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
 - **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥
 - **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
@@ -105,13 +105,17 @@ curl -s -X POST http://localhost:5599/login \
 
 ### 知识图谱数据
 
-- 数据来源：Neo4j 查询导出（形如 `[{p:{start,end,segments,length}}]`），前端不连接 Neo4j
-- 当前文件：`data/neo4j_query_table_data_2026-1-2.json`，525 条路径记录、约 516 个节点
-- 关系类型：包含（424）、研究（55）、别名是（12）、先于（9）、具有（8）、依据（7）、关联（5）、分为（3）、采用（2）
-- 渲染：`convertJsonToVisFormat()` 将导出结构转换为 `{nodes, edges}`，再交给 `vis.Network`
-- 布局选项：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）
+- 数据来源：graphify（GraphRAG）从 `resources/graph-rail/*.md` 提取，原始输出在 `resources/graph-rail/graphify-out/graph.json`
+- 仓库内副本：`data/graph.json`；`resources/` 被 `.gitignore` 排除，页面只能加载 `data/graph.json`
+- 规模：85 节点（16 个 `document` + 69 个 `concept`）、99 条边、13 个社区、7 条 hyperedges（忽略）
+- 结构：`{nodes:[{id,label,norm_label,file_type,community,source_file,...}], links:[{source,target,relation,confidence,confidence_score,...}]}`
+- 社区名：`.graphify_labels.json` 是 dotfile，`express.static` 默认不提供，因此 13 个社区名内联在 `COMMUNITY_NAMES`
+- 关系：英文 `relation` 经 `RELATION_ZH` 映射为中文显示，未知类型回退英文
+- 渲染：`convertGraphJsonToVisFormat()` 转换为 `{nodes, edges}`；`setupNetwork()` 只补缺失字段，不覆盖转换时生成的样式
+- 视觉编码：按社区着色、`document` 为方框、`concept` 为圆点、INFERRED 边为虚线、无箭头（数据是无向图）
+- 布局选项：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）；物理参数按 85 节点调整
 
-更新图谱数据时，替换 JSON 并同步修改 `knowledge-graph.html` 中的 `jsonFilePath`。
+更新图谱时，重新生成后执行 `cp resources/graph-rail/graphify-out/graph.json data/graph.json`，并检查 `COMMUNITY_NAMES`/`COMMUNITY_COLORS`（社区编号可能变化）。
 
 ### 课程资源
 
@@ -119,7 +123,7 @@ curl -s -X POST http://localhost:5599/login \
 
 - `城市轨道交通运营管理.pdf`：主教材
 - `markdown-book/`：16 章的 `.md` 与 `.html`，另有 `image/` 图片目录
-- `graph-rail/`：用于构建知识图谱的章节 Markdown 副本（含 `graphify-out/`）
+- `graph-rail/`：graphify 的输入 Markdown 与 `graphify-out/` 输出
 - `ppt/`：第 2~7、10~11 章课件（8 个 PDF；课程本身没有第 8、9 章课件）
 - `video/`：第 1~8、10~16 章 MOOC 视频（171 个 mp4；第 9 章本身没有视频）
 - `paper/`：学术论文

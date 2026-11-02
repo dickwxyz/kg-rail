@@ -159,6 +159,31 @@
         border: 1px solid #ffeeba;
       }
 
+      /* 社区图例 */
+      .graph-legend {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 8px;
+        max-height: 190px;
+        overflow-y: auto;
+        font-size: 11px;
+        color: #34495e;
+      }
+
+      .graph-legend .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .graph-legend .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
       /* 图谱容器 - 占满导航栏下的所有空间 */
       #knowledge-graph-container {
         position: absolute;
@@ -270,6 +295,9 @@
 
       <!-- 状态信息 -->
       <div id="status-message" class="status-message"></div>
+
+      <!-- 社区图例 -->
+      <div id="graph-legend" class="graph-legend"></div>
     </div>
 
     <!-- 登录提示 -->
@@ -344,42 +372,31 @@
         return graphNetwork;
       }
 
-      // 统一的网络处理函数：设置节点标题和边关系类型
+      // 统一网络处理：只为缺失的标题/标签补默认值，不覆盖转换时生成的样式
       function setupNetwork(network) {
         if (!network?.body?.data) return;
 
         try {
-          // 1. 更新节点标题
           const nodeDs = network.body.data.nodes;
           const edgeDs = network.body.data.edges;
-          const nodes = nodeDs.get();
-          const edges = edgeDs.get();
 
-          // 设置节点标题格式
-          nodeDs.update(nodes.map(n => ({
-            id: n.id,
-            title: [n.label, n.group].filter(Boolean).join(" / ")
-          })));
+          // 保留转换时生成的详细 tooltip；仅对缺少 title 的节点补默认值
+          nodeDs.update(
+            nodeDs.get()
+              .filter(n => !n.title)
+              .map(n => ({ id: n.id, title: [n.label, n.group].filter(Boolean).join(" / ") }))
+          );
 
-          // 2. 提取所有关系类型并统一更新边的样式和标签
-          const edgeUpdates = edges.map(e => ({
-            id: e.id,
-            label: e.type || e.relationshipType || "",
-            title: e.type || e.relationshipType || "关系",
-            // 统一样式
-            color: { color: "#999999", highlight: "#666666", inherit: false },
-            width: 1.5,
-            arrows: { to: { enabled: true, scaleFactor: 1.2 } },
-            font: {
-              align: "middle",
-              size: 14,
-              color: "#777777",
-              background: "rgba(255,255,255,0.85)"
-            }
-          }));
-
-          // 批量更新
-          edgeDs.update(edgeUpdates);
+          // 保留中文关系标签、虚线、宽度和颜色；仅对缺少 label 的边补默认值
+          edgeDs.update(
+            edgeDs.get()
+              .filter(e => !e.label)
+              .map(e => ({
+                id: e.id,
+                label: e.type || e.relationshipType || "",
+                title: e.type || e.relationshipType || "关系"
+              }))
+          );
         } catch (error) {
           console.error("设置网络属性时出错:", error);
         }
@@ -431,12 +448,12 @@
               enabled: true,
               solver: "forceAtlas2Based",
               forceAtlas2Based: {
-                gravitationalConstant: -200,
-                centralGravity: 0.06,
-                springLength: 260,
-                springConstant: 0.035,
+                gravitationalConstant: -150,
+                centralGravity: 0.12,
+                springLength: 160,
+                springConstant: 0.04,
                 damping: 0.9,
-                avoidOverlap: 1
+                avoidOverlap: 0.8
               },
               minVelocity: 0.75,
               stabilization: {
@@ -453,12 +470,12 @@
               enabled: true,
               solver: "barnesHut",
               barnesHut: {
-                gravitationalConstant: -2000,
-                centralGravity: 0.3,
-                springLength: 150,
+                gravitationalConstant: -1200,
+                centralGravity: 0.35,
+                springLength: 130,
                 springConstant: 0.05,
                 damping: 0.9,
-                avoidOverlap: 1
+                avoidOverlap: 0.8
               },
               minVelocity: 0.75,
               stabilization: {
@@ -475,15 +492,16 @@
               enabled: true,
               solver: "repulsion",
               repulsion: {
-                nodeDistance: 300,
-                springLength: 240,
-                springConstant: 0.05,
+                nodeDistance: 120,
+                springLength: 110,
+                springConstant: 0.07,
+                centralGravity: 0.25,
                 damping: 0.9
               },
               minVelocity: 0.7,
               stabilization: {
                 enabled: true,
-                iterations: 500,
+                iterations: 600,
                 updateInterval: 80
               }
             }
@@ -501,7 +519,9 @@
           console.error("应用布局预设时出错:", err);
         }
 
-        setPhysicsAutoFreeze(network, { enable: true });
+        if (preset !== "none") {
+          setPhysicsAutoFreeze(network, { enable: true });
+        }
         setupNetwork(network);
       }
 
@@ -687,10 +707,10 @@
       // 实际使用的图谱数据
       let graphData = defaultData;
 
-      // 从JSON文件加载数据
+      // 从 graphify 输出的 graph.json 加载数据
       async function loadDataFromJson() {
-        const jsonFilePath = "./data/neo4j_query_table_data_2026-1-2.json";
-        showStatus(`正在加载数据文件: ${jsonFilePath}...`, "warning");
+        const jsonFilePath = "./data/graph.json";
+        showStatus(`正在加载图谱数据: ${jsonFilePath}...`, "warning");
 
         try {
           const response = await fetch(jsonFilePath);
@@ -698,184 +718,160 @@
             throw new Error(`无法加载数据文件 (${response.status} ${response.statusText})`);
           }
 
-          const jsonData = await response.json();
-          showStatus(`成功加载数据文件，包含 ${jsonData.length} 条记录`, "success");
-          console.log("加载的JSON数据样例:", JSON.stringify(jsonData[0]).substring(0, 300) + "...");
+          const graphJson = await response.json();
+          if (!graphJson || !Array.isArray(graphJson.nodes) || !Array.isArray(graphJson.links)) {
+            throw new Error("graph.json 结构不合法：缺少 nodes/links 数组");
+          }
 
-          // 转换数据为可视化所需的格式
-          return convertJsonToVisFormat(jsonData);
+          const visData = convertGraphJsonToVisFormat(graphJson);
+          showStatus(`成功加载图谱：${visData.nodes.length} 个节点 / ${visData.edges.length} 条关系`, "success");
+          return visData;
         } catch (error) {
-          console.error("加载JSON数据失败:", error);
+          console.error("加载图谱数据失败:", error);
           showStatus(`加载数据文件失败: ${error.message}。使用默认数据。`, "error");
           return defaultData;
         }
       };
 
-      // 转换JSON数据为可视化所需的格式
-      function convertJsonToVisFormat(jsonData) {
-        console.log("开始转换图谱数据...");
+      // GraphRAG 数据：社区、关系的中文映射
+      const COMMUNITY_NAMES = {
+        0: "网络运营与客流设计",
+        1: "列车运行控制与调度",
+        2: "运输能力与提速技术",
+        3: "轨道交通系统类型",
+        4: "列车运行基本概念",
+        5: "安全与应急管理",
+        6: "运营计划编制",
+        7: "车站管理与客流组织",
+        8: "票务管理",
+        9: "政策与经营模式",
+        10: "绪论与发展历程",
+        11: "设备维修管理",
+        12: "企业组织与管理模式"
+      };
 
-        // 用于存储转换后的数据
-        const visData = {
-          nodes: [],
-          edges: []
-        };
+      const COMMUNITY_COLORS = {
+        0: "#2563EB", 1: "#EA580C", 2: "#DC2626", 3: "#0F766E",
+        4: "#15803D", 5: "#CA8A04", 6: "#7C3AED", 7: "#DB2777",
+        8: "#92400E", 9: "#475569", 10: "#0891B2", 11: "#4D7C0F",
+        12: "#A21CAF"
+      };
 
-        // 用于跟踪已处理的节点和关系，避免重复
-        const processedNodes = new Map();
-        const processedRelationships = new Map();
+      const RELATION_ZH = {
+        contains: "包含",
+        related_to: "相关",
+        influences: "影响",
+        depends_on: "依赖于",
+        includes: "包括",
+        enhances: "增强",
+        part_of: "属于",
+        applies_to: "适用于",
+        uses: "使用",
+        reduces: "降低",
+        supports: "支持"
+      };
 
-        // 处理所有记录
-        jsonData.forEach((record, index) => {
-          // 检查记录格式
-          if (!record.p) {
-            console.warn(`记录 #${index} 没有 'p' 属性，跳过`);
+      function buildNodeTitle(node, communityName) {
+        return [
+          `${node.label || node.norm_label || node.id}（${communityName}）`,
+          node.file_type === "document" ? "文档节点" : "概念节点",
+          node.source_file ? `来源：${node.source_file}` : "",
+          node.rationale ? `说明：${node.rationale}` : ""
+        ].filter(Boolean).join(" | ");
+      }
+
+      // 转换 graphify 的 graph.json 为 vis.js 格式
+      function convertGraphJsonToVisFormat(graphJson) {
+        console.log("开始转换 GraphRAG 图谱数据...");
+        const visData = { nodes: [], edges: [] };
+        const nodeIds = new Set();
+
+        (graphJson.nodes || []).forEach(node => {
+          const community = Number.isInteger(node.community) ? node.community : -1;
+          const communityName = COMMUNITY_NAMES[community] || `社区 ${community}`;
+          const isDoc = node.file_type === "document";
+          const color = COMMUNITY_COLORS[community] || "#94a3b8";
+          const label = node.label || node.norm_label || String(node.id);
+
+          nodeIds.add(String(node.id));
+          visData.nodes.push({
+            id: String(node.id),
+            label,
+            title: buildNodeTitle(node, communityName),
+            group: communityName,
+            community,
+            communityName,
+            color: {
+              background: color,
+              border: "#1f2937",
+              highlight: { background: color, border: "#0f172a" },
+              hover: { background: color, border: "#0f172a" }
+            },
+            shape: isDoc ? "box" : "dot",
+            size: isDoc ? 22 : 16,
+            font: {
+              size: isDoc ? 13 : 14,
+              face: "Arial",
+              color: isDoc ? "#ffffff" : "#1f2937"
+            },
+            borderWidth: 2,
+            shadow: true,
+            widthConstraint: isDoc ? { maximum: 180 } : undefined,
+            properties: { ...node, name: label, communityName }
+          });
+        });
+
+        (graphJson.links || []).forEach((link, index) => {
+          const from = String(link.source);
+          const to = String(link.target);
+          if (!nodeIds.has(from) || !nodeIds.has(to)) {
+            console.warn("跳过找不到端点的关系:", link);
             return;
           }
 
-          try {
-            // 处理起始节点
-            if (record.p.start) {
-              const startNode = record.p.start;
-              if (!processedNodes.has(startNode.identity)) {
-                // 确定节点标签和颜色
-                let nodeColor = "#97c2fc"; // 默认颜色
-                let nodeGroup = "Node"; // 默认组别
-
-                if (startNode.labels && startNode.labels.length > 0) {
-                  nodeGroup = startNode.labels[0];
-                  if (startNode.labels.includes("Concept")) {
-                    nodeColor = "#fb7e81";
-                    nodeGroup = "Concept";
-                  } else if (startNode.labels.includes("Technique")) {
-                    nodeColor = "#7be141";
-                    nodeGroup = "Technique";
-                  } else if (startNode.labels.includes("Theory")) {
-                    nodeColor = "#ffff00";
-                    nodeGroup = "Theory";
-                  } else if (startNode.labels.includes("Chapter")) {
-                    nodeColor = "#97c2fc";
-                    nodeGroup = "Chapter";
-                  }
-                }
-
-                // 添加节点
-                visData.nodes.push({
-                  id: startNode.identity.toString(),
-                  label: startNode.properties.name || "未命名节点",
-                  title: startNode.properties.name || "未命名节点",
-                  group: nodeGroup,
-                  color: nodeColor,
-                  shape: "dot", // 使用圆形节点
-                  font: { size: 16, face: "Arial", multi: "html" },
-                  borderWidth: 2,
-                  shadow: true,
-                  properties: startNode.properties
-                });
-
-                // 标记为已处理
-                processedNodes.set(startNode.identity, true);
-              }
+          const inferred = link.confidence === "INFERRED";
+          const relationZh = RELATION_ZH[link.relation] || link.relation;
+          visData.edges.push({
+            id: `e_${index}_${link.source}_${link.target}`,
+            from,
+            to,
+            label: relationZh,
+            type: link.relation,
+            relationshipType: link.relation,
+            title: [
+              `${relationZh}（${link.relation}）`,
+              `置信度：${link.confidence}${typeof link.confidence_score === "number" ? ` ${link.confidence_score}` : ""}`,
+              link.rationale ? `依据：${link.rationale}` : ""
+            ].filter(Boolean).join(" | "),
+            dashes: inferred ? [6, 4] : false,
+            width: inferred ? 1.2 : 1.8,
+            color: { color: inferred ? "#8a94a6" : "#94a3b8", highlight: "#475569", inherit: false },
+            arrows: { to: { enabled: false } },
+            font: {
+              align: "middle",
+              size: 12,
+              color: "#475569",
+              background: "rgba(255,255,255,0.85)",
+              strokeWidth: 2
+            },
+            smooth: { type: "cubicBezier", roundness: 0.2 },
+            properties: {
+              relation: link.relation,
+              relation_zh: relationZh,
+              confidence: link.confidence,
+              confidence_score: link.confidence_score,
+              rationale: link.rationale
             }
-
-            // 处理终点节点
-            if (record.p.end) {
-              const endNode = record.p.end;
-              if (!processedNodes.has(endNode.identity)) {
-                // 确定节点标签和颜色
-                let nodeColor = "#97c2fc"; // 默认颜色
-                let nodeGroup = "Node"; // 默认组别
-
-                if (endNode.labels && endNode.labels.length > 0) {
-                  nodeGroup = endNode.labels[0];
-                  if (endNode.labels.includes("Concept")) {
-                    nodeColor = "#fb7e81";
-                    nodeGroup = "Concept";
-                  } else if (endNode.labels.includes("Technique")) {
-                    nodeColor = "#7be141";
-                    nodeGroup = "Technique";
-                  } else if (endNode.labels.includes("Theory")) {
-                    nodeColor = "#ffff00";
-                    nodeGroup = "Theory";
-                  } else if (endNode.labels.includes("Chapter")) {
-                    nodeColor = "#97c2fc";
-                    nodeGroup = "Chapter";
-                  }
-                }
-
-                // 添加节点
-                visData.nodes.push({
-                  id: endNode.identity.toString(),
-                  label: endNode.properties.name || "未命名节点",
-                  title: endNode.properties.name || "未命名节点",
-                  group: nodeGroup,
-                  color: nodeColor,
-                  shape: "dot",
-                  font: { size: 16, face: "Arial", multi: "html" },
-                  borderWidth: 2,
-                  shadow: true,
-                  properties: endNode.properties
-                });
-
-                // 标记为已处理
-                processedNodes.set(endNode.identity, true);
-              }
-            }
-
-            // 处理段落中的关系
-            if (record.p.segments && Array.isArray(record.p.segments)) {
-              record.p.segments.forEach((segment, segIndex) => {
-                if (segment.relationship) {
-                  const rel = segment.relationship;
-
-                  // 确保不重复添加同一关系
-                  const relKey = `${rel.start}-${rel.end}-${rel.identity}`;
-                  if (processedRelationships.has(relKey)) {
-                    return;
-                  }
-
-                  // 添加边
-                  visData.edges.push({
-                    id: `e${index}_${segIndex}_${rel.identity}`,
-                    from: rel.start.toString(),
-                    to: rel.end.toString(),
-                    type: rel.type,
-                    label: rel.type,
-                    title: rel.type,
-                    relationshipId: rel.identity.toString(),
-                    relationshipType: rel.type,
-                    color: { color: "#999999", highlight: "#666666", inherit: false },
-                    width: 1.5,
-                    arrows: {
-                      to: { enabled: true, scaleFactor: 1.2 }
-                    },
-                    font: {
-                      align: "middle",
-                      size: 14,
-                      color: "#777777",
-                      background: "rgba(255,255,255,0.85)",
-                      strokeWidth: 2
-                    },
-                    smooth: {
-                      type: "cubicBezier",
-                      roundness: 0.3
-                    },
-                    properties: rel.properties || {}
-                  });
-
-                  // 标记为已处理
-                  processedRelationships.set(relKey, true);
-                }
-              });
-            }
-          } catch (error) {
-            console.error(`处理记录 #${index} 时出错:`, error);
-          }
+          });
         });
+
+        if (Array.isArray(graphJson.hyperedges) && graphJson.hyperedges.length > 0) {
+          console.info(`已忽略 ${graphJson.hyperedges.length} 条超边（vis.js 不支持）`);
+        }
 
         console.log(`转换完成，生成 ${visData.nodes.length} 个节点和 ${visData.edges.length} 条边`);
         return visData;
-      };
+      }
 
       // 渲染图谱
       async function renderGraph() {
@@ -888,44 +884,38 @@
         try {
           // 加载数据
           graphData = await loadDataFromJson();
-          showStatus(`数据加载成功 - 准备渲染 ${graphData.nodes.length} 个节点`, "success");
+          showStatus(`数据加载成功 - 准备渲染 ${graphData.nodes.length} 个节点 / ${graphData.edges.length} 条关系`, "success");
         } catch (error) {
           showStatus("数据加载失败 - 使用默认数据", "error");
           graphData = defaultData;
         }
 
-        // 准备节点数据
+        // 准备节点数据（保留转换函数生成的社区颜色、形状、字体和 tooltip）
         const nodes = new vis.DataSet(graphData.nodes.map(node => ({
+          ...node,
           id: node.id || node.identity?.toString() || String(Math.random()),
           label: node.label || node.properties?.name || "未命名节点",
           title: node.title || node.properties?.name || "未命名节点",
           group: node.group || "Node",
-          color: node.color || "#97c2fc",
-          shape: node.shape || "dot",
-          font: { size: 16, face: "Arial", multi: "html" },
-          borderWidth: 2,
-          shadow: true
+          color: node.color || COMMUNITY_COLORS[node.community] || "#97c2fc",
+          shape: node.shape || (node.properties?.file_type === "document" ? "box" : "dot")
         })));
 
-        // 准备边数据
+        // 准备边数据（中文关系标签优先，保留 INFERRED 虚线与置信度信息）
         const edges = new vis.DataSet(graphData.edges.map(edge => ({
+          ...edge,
           id: edge.id || String(Math.random()),
           from: edge.from,
           to: edge.to,
-          label: edge.type || edge.label || "",
-          title: edge.type || edge.label || "",
-          type: edge.type || edge.label || "",
-          relationshipType: edge.type || edge.label || "",
-          color: { color: "#999999", highlight: "#666666", inherit: false },
-          width: 1.5,
-          arrows: { to: { enabled: true, scaleFactor: 1.2 } },
-          font: {
-            align: "middle",
-            size: 14,
-            color: "#777777",
-            background: "rgba(255,255,255,0.85)"
-          },
-          smooth: { type: "cubicBezier", roundness: 0.3 }
+          label: edge.label || RELATION_ZH[edge.type] || edge.type || "",
+          title: edge.title || edge.label || edge.type || "",
+          type: edge.type || "",
+          relationshipType: edge.type || "",
+          dashes: edge.dashes ?? (edge.properties?.confidence === "INFERRED"),
+          width: edge.width ?? 1.5,
+          color: edge.color || { color: "#94a3b8", highlight: "#475569", inherit: false },
+          arrows: edge.arrows || { to: { enabled: false } },
+          smooth: edge.smooth || { type: "cubicBezier", roundness: 0.2 }
         })));
 
         // 网络配置
@@ -949,15 +939,15 @@
             enabled: true,
             solver: "forceAtlas2Based",
             forceAtlas2Based: {
-              gravitationalConstant: -200,
-              centralGravity: 0.06,
-              springLength: 260,
-              springConstant: 0.035,
+              gravitationalConstant: -150,
+              centralGravity: 0.12,
+              springLength: 160,
+              springConstant: 0.04,
               damping: 0.9,
-              avoidOverlap: 1
+              avoidOverlap: 0.8
             },
             minVelocity: 0.5,
-            stabilization: { enabled: true, iterations: 1000, updateInterval: 50, fit: true }
+            stabilization: { enabled: true, iterations: 800, updateInterval: 50, fit: true }
           },
           interaction: {
             hover: true,
@@ -993,8 +983,19 @@
 
         // 使用简单的前端过滤
         const filteredNodes = graphData.nodes.filter(node => {
-          const nodeText = (node.properties?.title || node.properties?.name || node.label || "").toLowerCase();
-          return nodeText.includes(searchText.toLowerCase());
+          const props = node.properties || {};
+          const typeText = props.file_type === "document" ? "文档" : props.file_type === "concept" ? "概念" : "";
+          const haystack = [
+            node.label,
+            props.norm_label,
+            props.source_file,
+            props.rationale,
+            props.communityName,
+            node.communityName,
+            typeText,
+            node.id
+          ].filter(Boolean).join(" ").toLowerCase();
+          return haystack.includes(searchText.toLowerCase());
         });
 
         if (filteredNodes.length > 0) {
@@ -1025,6 +1026,16 @@
         }
       }
 
+      // 渲染社区图例
+      function renderLegend() {
+        const legend = document.getElementById("graph-legend");
+        if (!legend) return;
+        legend.innerHTML = Object.keys(COMMUNITY_NAMES).map(key => {
+          const index = Number(key);
+          return `<div class="legend-item"><span class="legend-dot" style="background:${COMMUNITY_COLORS[index]}"></span><span>${COMMUNITY_NAMES[index]}</span></div>`;
+        }).join("");
+      }
+
       // 页面加载完成后初始化知识图谱
       window.onload = function() {
         // 检查登录状态
@@ -1033,7 +1044,8 @@
         // 显示图谱正在加载的状态
         showStatus("正在加载知识图谱数据...", "warning");
 
-        // 渲染图谱
+        // 渲染图谱与图例
+        renderLegend();
         renderGraph();
 
         // 搜索按钮事件监听

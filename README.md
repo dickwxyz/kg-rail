@@ -10,7 +10,7 @@
 | 模块 | 页面 | 说明 |
 | --- | --- | --- |
 | 课程首页 | `index.html` | 课程简介、课程信息、学习目标、课程大纲、教师简介 |
-| 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的课程知识图谱可视化，支持节点搜索和多种布局 |
+| 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的 GraphRAG 课程知识图谱可视化，支持节点搜索和多种布局 |
 | AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，支持多话题、Markdown/代码/公式渲染 |
 | 知识测试（暂未开放） | `test.html` | 导航入口保留，点击仅提示；服务端将直接访问重定向回首页 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
@@ -82,14 +82,13 @@ kg-rail/
 ├── resources.html            # 课程资源导航
 ├── user-center.html          # 用户中心
 ├── data/
-│   ├── neo4j_query_table_data_2026-1-2.json   # 当前使用的图谱数据（525 条记录）
-│   └── neo4j_query_table_data_2025-12-27.json # 历史版本
+│   └── graph.json            # GraphRAG 图谱（85 节点 / 99 边 / 13 社区）
 ├── pic/                      # 首页图片素材
 └── resources/                # 课程资源（未纳入版本库）
     ├── 城市轨道交通运营管理.pdf                # 主教材
     ├── 铁路站场及枢纽 第2版.pdf
     ├── markdown-book/        # 16 章 Markdown/HTML 文档
-    ├── graph-rail/           # 构建知识图谱所用的章节 Markdown
+    ├── graph-rail/           # graphify 的输入 Markdown 与 graphify-out 输出
     ├── ppt/                  # 第 2~7、10~11 章课件（PDF，共 8 个）
     ├── video/                # 第 1~8、10~16 章 MOOC 视频（171 个）
     ├── paper/                # 学术论文
@@ -137,23 +136,17 @@ kg-rail/
 
 ## 知识图谱
 
-知识图谱数据由 Neo4j 查询结果导出，前端不再直连 Neo4j。`knowledge-graph.html` 通过 `fetch` 加载 `data/neo4j_query_table_data_2026-1-2.json`，转换为 vis.js 的节点/边结构后渲染。
+知识图谱由 graphify（GraphRAG）从 `resources/graph-rail/` 的 16 章 Markdown 中提取生成，`knowledge-graph.html` 通过 `fetch("./data/graph.json")` 加载并转换为 vis.js 的节点/边结构。
 
-当前数据集包含 525 条路径记录、约 516 个节点，关系类型及数量：
+- **规模**：85 个节点（16 个文档节点 + 69 个概念节点）、99 条关系、13 个社区
+- **置信度**：72 条 EXTRACTED、27 条 INFERRED；INFERRED 关系以虚线显示
+- **社区**：按 13 个社区着色，社区名内联在页面中；`document` 节点为方框，`concept` 节点为圆点
+- **关系映射**：graphify 输出的英文关系（contains、related_to 等）在页面上映射为中文
+- **超边**：7 条 hyperedges 不渲染（vis.js 不支持原生超边）
 
-| 关系 | 数量 |
-| --- | --- |
-| 包含 | 424 |
-| 研究 | 55 |
-| 别名是 | 12 |
-| 先于 | 9 |
-| 具有 | 8 |
-| 依据 | 7 |
-| 关联 | 5 |
-| 分为 | 3 |
-| 采用 | 2 |
+页面提供节点搜索（支持节点名、来源文件、社区、说明）和五种布局：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）。
 
-页面提供节点搜索和五种布局：层次结构、力导向（ForceAtlas2）、Barnes-Hut、排斥布局（默认）、无物理（静态）。
+更新图谱时，重新生成 `resources/graph-rail/graphify-out/graph.json` 后复制为 `data/graph.json`。`resources/` 不纳入版本库，页面只加载 `data/graph.json`。
 
 ## AI 问答配置
 
