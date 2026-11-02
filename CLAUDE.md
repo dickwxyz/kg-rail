@@ -13,7 +13,7 @@
 - **前端**：原生 HTML/CSS/JavaScript，无构建流程、无打包器，文件由 Express 直接托管
 - **图谱可视化**：vis.js 4.21（CDN 引入）
 - **AI**：DeepSeek 官方 API（`https://api.deepseek.com`），模型为 `deepseek-flash`（DeepSeek-V4.1-Flash）
-- **文档渲染**：markdown-it 14、highlight.js 11、MathJax 3（均为 CDN 引入）
+- **文档渲染**：marked 5、highlight.js 9、MathJax 3.2.2（均在 `vendor/` 本地托管，不依赖外网 CDN）
 
 ## 命令
 
@@ -96,7 +96,7 @@ curl -s -X POST http://localhost:5599/login \
 - **index.html**：课程首页，导航栏根据 `localStorage` 显示登录/退出；内容公开
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
 - **knowledge-graph.html**：知识图谱。登录后加载 `./data/graph.json`（GraphRAG 输出），转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
-- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥
+- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版
 - **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
 - **user-center.html**：个人信息编辑；学生显示「学情检测」（开发中），教师显示「学生信息」筛选表格与「教学建议」（开发中）
@@ -143,6 +143,7 @@ curl -s -X POST http://localhost:5599/login \
 - 前端所有接口均使用相对路径（`/login`、`/api/questions` 等），必须通过服务器访问，直接打开 HTML 文件会失败
 - 中文内容与注释为项目惯例，新增文档和注释默认使用中文
 - `resources/`、`user.db`、`.env`、`node_modules/` 均不纳入版本库，不要提交；新增密钥一律写入 `.env` 并同步更新 `.env.example`
+- 前端第三方库统一放在 `vendor/`，不要引用外网 CDN（学校网络可能无法访问 jsdelivr）
 
 ## 安全考虑
 

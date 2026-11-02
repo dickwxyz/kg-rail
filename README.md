@@ -26,7 +26,7 @@
 - **前端**：原生 HTML / CSS / JavaScript，无构建流程
 - **可视化**：vis.js 4.21
 - **AI**：DeepSeek 官方 API，模型 `deepseek-flash`（DeepSeek-V4.1-Flash）
-- **文档渲染**：markdown-it 14 + highlight.js 11 + MathJax 3
+- **文档渲染**：marked 5 + highlight.js 9 + MathJax 3.2.2（本地托管在 `vendor/`，不依赖外网 CDN）
 
 ## 快速开始
 
@@ -83,6 +83,7 @@ kg-rail/
 ├── user-center.html          # 用户中心
 ├── data/
 │   └── graph.json            # GraphRAG 图谱（85 节点 / 99 边 / 13 社区）
+├── vendor/                   # 本地前端依赖（marked、highlight.js、MathJax）
 ├── pic/                      # 首页图片素材
 └── resources/                # 课程资源（未纳入版本库）
     ├── 城市轨道交通运营管理.pdf                # 主教材

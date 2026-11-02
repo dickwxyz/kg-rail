@@ -247,12 +247,10 @@
         text-decoration: underline;
       }
 </style>
-    <!-- 引入 Markdown-It 与任务列表插件 -->
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
-    <!-- 代码高亮样式与库 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/dist/highlight.min.js"></script>
+    <!-- 本地依赖：Markdown 解析、代码高亮（不依赖外网 CDN） -->
+    <script src="./vendor/marked.min.js"></script>
+    <link rel="stylesheet" href="./vendor/atom-one-dark.min.css" />
+    <script src="./vendor/highlight.min.js"></script>
     <!-- 使用 MathJax v3 进行 TeX 公式渲染 -->
     <!-- 页面脚本：登录状态、AI 问答逻辑、UI 增强与工具栏 -->
     <script>
@@ -270,7 +268,7 @@
             }
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
+    <script src="./vendor/mathjax/es5/tex-chtml.js" id="MathJax-script" async></script>
     <!-- 数学公式先统一为 $ / $$ 定界符，渲染完成后由 MathJax 统一排版 -->
 </head>
 <body>
@@ -458,13 +456,8 @@
         // 渲染 Markdown 文本
         function renderMarkdown(md) {
             const text = normalizeMathDelimiters(md);
-            if (window.markdownit) {
-                if (!window.mdParser) {
-                    const parser = window.markdownit({ html: true, linkify: true, typographer: true });
-                    if (window.markdownitTaskLists) parser.use(window.markdownitTaskLists, { enabled: true, label: true });
-                    window.mdParser = parser;
-                }
-                return window.mdParser.render(text);
+            if (window.marked && typeof window.marked.parse === "function") {
+                return window.marked.parse(text, { gfm: true, breaks: false });
             }
             const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             let t = esc(text);
@@ -542,7 +535,12 @@
             const highlight = () => {
                 if (window.hljs) {
                     bubble.querySelectorAll('pre code').forEach(block => {
-                        window.hljs.highlightElement(block);
+                        // 兼容 highlight.js 9.x（highlightBlock）与 10+/11+（highlightElement）
+                        if (typeof window.hljs.highlightElement === "function") {
+                            window.hljs.highlightElement(block);
+                        } else if (typeof window.hljs.highlightBlock === "function") {
+                            window.hljs.highlightBlock(block);
+                        }
                     });
                     return true;
                 }
