@@ -207,7 +207,18 @@
         }
         .tool-btn:hover, .model-select:hover { background: #f0f0f0; border-color: #bbb; }
         .tool-btn.primary { background-color: #e9f5ff; color: #2c3e50; border-color: #a3d5ff; }
-        
+        /* 知识图谱模式开启态 */
+        .tool-btn.active {
+            background-color: #fff3bf; border-color: #f1c40f;
+            color: #7a5d00; font-weight: bold;
+        }
+        .graph-mode-hint {
+            display: none; margin-bottom: 8px; padding: 6px 10px;
+            border: 1px solid #f1c40f; background: #fffbe6; color: #7a5d00;
+            border-radius: 6px; font-size: 0.8rem;
+        }
+        .graph-mode-hint.visible { display: block; }
+
         .model-select { min-width: 200px; outline: none; }
 
         .quick-prompts-panel { margin-top: 8px; display: none; }
@@ -235,6 +246,23 @@
 
         /* 加载动画 */
         .typing-indicator { font-style: italic; color: #888; font-size: 0.8rem; margin-left: 50px; display: none; }
+
+        /* 知识图谱检索依据 */
+        .graph-evidence {
+            margin-top: 12px; padding-top: 8px; border-top: 1px dashed #d8dee6;
+            font-size: 0.82rem; color: #444;
+        }
+        .graph-evidence summary { cursor: pointer; font-weight: 600; color: #2c3e50; }
+        .graph-evidence .kg-node-list { margin: 8px 0 4px; line-height: 1.9; }
+        .kg-node {
+            display: inline-block; padding: 1px 7px; margin: 2px 3px 2px 0;
+            background: #fff3bf; border: 1px solid #f1c40f;
+            border-radius: 10px; color: #333;
+        }
+        .kg-edge { margin: 3px 0; color: #555; }
+        .kg-edge .kg-rel { color: #8a6d00; font-weight: 600; }
+        .kg-conf { color: #999; font-size: 0.72rem; margin-left: 4px; }
+        mark.kg-hl { background: #fff3bf; color: inherit; padding: 0 1px; border-radius: 2px; }
 
         /* 卡片式布局 */
         .card {
@@ -358,7 +386,7 @@
 
                     <button class="tool-btn" id="quick-prompts-btn" onclick="toggleQuickPrompts()">常用提示词</button>
                     <button class="tool-btn">知识库</button>
-                    <button class="tool-btn">知识图谱</button>
+                    <button class="tool-btn" id="knowledge-graph-btn" onclick="toggleGraphMode()" aria-pressed="false">知识图谱</button>
                 </div>
                 <div class="quick-prompts-panel" id="quick-prompts">
                     <div class="quick-prompts">
@@ -367,6 +395,9 @@
                         <button class="quick-btn" onclick="insertPrompt('已知一条线路的各个车站的上下车人数的dataframe，求断面客流的python代码。')">已知一条线路的各个车站的上下车人数的dataframe，求断面客流的python代码。</button>
                         <button class="quick-btn" onclick="insertPrompt('使用表格总结市域铁路、地铁、城际铁路之间的区别。')">使用表格总结市域铁路、地铁、城际铁路之间的区别。</button>
                     </div>
+                </div>
+                <div class="graph-mode-hint" id="graph-mode-hint">
+                    知识图谱模式已开启：问题将由 Claude Code 结合 graphify 图谱检索回答。
                 </div>
                 <div class="input-row">
                     <textarea id="user-input" placeholder="请输入关于轨道交通的问题... (Shift+Enter 换行)"></textarea>
@@ -448,6 +479,7 @@
         let currentTopicDraft = false;  // 当前是否为空草稿
         let viewToken = 0;              // 切换/新建话题时自增，用于丢弃过期的异步回复
         let persistQueue = Promise.resolve(); // 串行化消息写入，保证顺序
+        let graphMode = false;          // 是否使用知识图谱问答（claude -p + graphify）
 
         const WELCOME_HTML = `
             <div class="message ai">
@@ -559,6 +591,126 @@
             if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
             panel.style.display = 'none';
         });
+
+        // ==================== 知识图谱问答模式 ====================
+
+        // 切换知识图谱模式（持续生效，再点一次退出）
+        function toggleGraphMode() {
+            graphMode = !graphMode;
+            const btn = document.getElementById('knowledge-graph-btn');
+            const hint = document.getElementById('graph-mode-hint');
+            if (btn) {
+                btn.classList.toggle('active', graphMode);
+                btn.setAttribute('aria-pressed', String(graphMode));
+            }
+            if (hint) hint.classList.toggle('visible', graphMode);
+        }
+
+        // 在答案正文中高亮命中的图谱节点
+        function highlightGraphTerms(container, labels) {
+            const terms = [...new Set((labels || []).filter(label => typeof label === 'string' && label.length >= 2))];
+            if (!terms.length) return;
+            terms.sort((a, b) => b.length - a.length);
+            const escapeReg = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(terms.map(escapeReg).join('|'), 'g');
+
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                    const parent = node.parentElement;
+                    if (!parent || parent.closest('pre, code, a, mark, .graph-evidence, .msg-toolbar')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            const textNodes = [];
+            while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+            textNodes.forEach(node => {
+                const text = node.nodeValue;
+                let match;
+                let last = 0;
+                let changed = false;
+                const fragment = document.createDocumentFragment();
+                pattern.lastIndex = 0;
+                while ((match = pattern.exec(text)) !== null) {
+                    changed = true;
+                    if (match.index > last) {
+                        fragment.appendChild(document.createTextNode(text.slice(last, match.index)));
+                    }
+                    const mark = document.createElement('mark');
+                    mark.className = 'kg-hl';
+                    mark.textContent = match[0];
+                    fragment.appendChild(mark);
+                    last = match.index + match[0].length;
+                    if (match[0].length === 0) pattern.lastIndex++;
+                }
+                if (!changed) return;
+                if (last < text.length) {
+                    fragment.appendChild(document.createTextNode(text.slice(last)));
+                }
+                node.parentNode.replaceChild(fragment, node);
+            });
+        }
+
+        // 在 AI 气泡下方渲染“知识图谱检索依据”
+        function appendGraphEvidence(msgDiv, evidence) {
+            const bubble = msgDiv.querySelector('.bubble');
+            if (!bubble) return;
+            const old = bubble.querySelector('.graph-evidence');
+            if (old) old.remove();
+
+            const nodes = evidence && Array.isArray(evidence.nodes) ? evidence.nodes : [];
+            const edges = evidence && Array.isArray(evidence.edges) ? evidence.edges : [];
+            if (!nodes.length && !edges.length) return;
+
+            const details = document.createElement('details');
+            details.className = 'graph-evidence';
+            details.open = true;
+            const summary = document.createElement('summary');
+            summary.textContent = `知识图谱检索依据（${nodes.length} 个节点 / ${edges.length} 条关系）`;
+            details.appendChild(summary);
+
+            if (nodes.length) {
+                const nodeList = document.createElement('div');
+                nodeList.className = 'kg-node-list';
+                nodes.forEach(node => {
+                    const chip = document.createElement('span');
+                    chip.className = 'kg-node';
+                    chip.textContent = node.label;
+                    chip.title = [node.sourceFile, node.type].filter(Boolean).join(' · ');
+                    nodeList.appendChild(chip);
+                });
+                details.appendChild(nodeList);
+            }
+
+            edges.forEach(edge => {
+                const row = document.createElement('div');
+                row.className = 'kg-edge';
+                const source = document.createElement('span');
+                source.className = 'kg-node';
+                source.textContent = edge.source;
+                const relation = document.createElement('span');
+                relation.className = 'kg-rel';
+                relation.textContent = ` —[${edge.relationZh || edge.relation}]→ `;
+                const target = document.createElement('span');
+                target.className = 'kg-node';
+                target.textContent = edge.target;
+                const confidence = document.createElement('span');
+                confidence.className = 'kg-conf';
+                confidence.textContent = edge.confidence || '';
+                row.appendChild(source);
+                row.appendChild(relation);
+                row.appendChild(target);
+                row.appendChild(confidence);
+                details.appendChild(row);
+            });
+
+            const toolbar = bubble.querySelector('.msg-toolbar');
+            bubble.insertBefore(details, toolbar || null);
+            highlightGraphTerms(bubble, nodes.map(node => node.label));
+        }
 
         // ==================== 话题列表与会话持久化 ====================
 
@@ -684,6 +836,10 @@
                 const el = appendMessage(role, message.content, false);
                 el.dataset.convIndex = String(index + 1);
                 el.dataset.msgId = String(message.id);
+                if (message.meta && message.meta.mode === 'graph') {
+                    el.dataset.mode = 'graph';
+                    appendGraphEvidence(el, message.meta.evidence);
+                }
             });
             chatLog.scrollTop = chatLog.scrollHeight;
         }
@@ -783,13 +939,15 @@
         }
 
         // 串行保存一条消息；保存成功后把消息 id 绑定到 DOM
-        function saveMessageToServer(topicId, role, content, msgEl) {
+        function saveMessageToServer(topicId, role, content, msgEl, meta) {
             if (!topicId) return Promise.resolve(null);
             const task = persistQueue.then(async () => {
                 try {
+                    const payload = { userId: getUserId(), role, content };
+                    if (meta !== undefined) payload.meta = meta;
                     const data = await apiRequest(`/api/topics/${topicId}/messages`, {
                         method: 'POST',
-                        body: JSON.stringify({ userId: getUserId(), role, content }),
+                        body: JSON.stringify(payload),
                     });
                     const msgId = data.message.id;
                     if (msgEl) {
@@ -800,8 +958,9 @@
                             return null;
                         }
                         if (typeof msgEl._pendingContent === 'string') {
-                            await updateMessageOnServer(topicId, msgId, msgEl._pendingContent);
+                            await updateMessageOnServer(topicId, msgId, msgEl._pendingContent, msgEl._pendingMeta);
                             msgEl._pendingContent = null;
+                            msgEl._pendingMeta = undefined;
                         }
                     }
                     return msgId;
@@ -826,12 +985,14 @@
             }
         }
 
-        async function updateMessageOnServer(topicId, msgId, content) {
+        async function updateMessageOnServer(topicId, msgId, content, meta) {
             if (!topicId || !msgId) return;
             try {
+                const payload = { userId: getUserId(), content };
+                if (meta !== undefined) payload.meta = meta;
                 await apiRequest(`/api/topics/${topicId}/messages/${msgId}`, {
                     method: 'PUT',
-                    body: JSON.stringify({ userId: getUserId(), content }),
+                    body: JSON.stringify(payload),
                 });
             } catch (error) {
                 console.warn('更新消息失败:', error);
@@ -993,7 +1154,7 @@
             const bubble = msgDiv.querySelector('.bubble');
             if (!bubble) return Promise.resolve();
             const clone = bubble.cloneNode(true);
-            clone.querySelectorAll('.msg-toolbar, .code-toolbar').forEach(el => el.remove());
+            clone.querySelectorAll('.msg-toolbar, .code-toolbar, .graph-evidence').forEach(el => el.remove());
             const text = clone.innerText.trim();
             return navigator.clipboard.writeText(text);
         }
@@ -1024,12 +1185,52 @@
             const idxStr = msgDiv.dataset.convIndex;
             const idx = idxStr !== undefined ? parseInt(idxStr, 10) : NaN;
             if (isNaN(idx)) return;
+            const isGraph = msgDiv.dataset.mode === 'graph';
             const apiKey = document.getElementById('api-key').value;
             const model = document.getElementById('model-select').value;
-            if (!apiKey) return;
+            if (!isGraph && !apiKey) return;
+
+            const topicId = currentTopicId;
+            const viewAtRefresh = viewToken;
             sendBtn.disabled = true;
             typingIndicator.style.display = 'block';
+            typingIndicator.textContent = isGraph ? '正在查询知识图谱…' : 'AI 正在思考中...';
             try {
+                if (isGraph) {
+                    const prev = conversationHistory[idx - 1];
+                    if (!prev || prev.role !== 'user') return;
+                    const history = conversationHistory
+                        .slice(1, idx - 1)
+                        .filter(item => item.role === 'user' || item.role === 'assistant')
+                        .slice(-6);
+                    const data = await apiRequest('/api/graph-ask', {
+                        method: 'POST',
+                        body: JSON.stringify({ question: prev.content, history }),
+                    });
+                    if (viewAtRefresh !== viewToken) return;
+
+                    const aiReply = data.answer;
+                    const evidence = data.evidence || { nodes: [], edges: [] };
+                    conversationHistory[idx] = { role: 'assistant', content: aiReply };
+                    const bubble = msgDiv.querySelector('.bubble');
+                    const toolbar = bubble.querySelector('.msg-toolbar');
+                    bubble.innerHTML = renderMarkdown(aiReply);
+                    if (toolbar) bubble.appendChild(toolbar);
+                    appendGraphEvidence(msgDiv, evidence);
+                    enhanceAIBubble(bubble);
+
+                    const meta = { mode: 'graph', evidence };
+                    if (topicId) {
+                        if (msgDiv.dataset.msgId) {
+                            updateMessageOnServer(topicId, msgDiv.dataset.msgId, aiReply, meta);
+                        } else {
+                            msgDiv._pendingContent = aiReply;
+                            msgDiv._pendingMeta = meta;
+                        }
+                    }
+                    return;
+                }
+
                 const messages = conversationHistory.slice(0, idx);
                 const response = await fetch("https://api.deepseek.com/chat/completions", {
                     method: "POST",
@@ -1045,6 +1246,7 @@
                 }
                 const data = await response.json();
                 const aiReply = data.choices[0].message.content;
+                if (viewAtRefresh !== viewToken) return;
                 conversationHistory[idx] = { role: "assistant", content: aiReply };
                 const bubble = msgDiv.querySelector('.bubble');
                 const toolbar = bubble.querySelector('.msg-toolbar');
@@ -1053,19 +1255,21 @@
                 enhanceAIBubble(bubble);
 
                 // 同步更新后端消息；保存未完成时暂存内容，等 id 返回后再补发
-                if (currentTopicId) {
+                if (topicId) {
                     if (msgDiv.dataset.msgId) {
-                        updateMessageOnServer(currentTopicId, msgDiv.dataset.msgId, aiReply);
+                        updateMessageOnServer(topicId, msgDiv.dataset.msgId, aiReply);
                     } else {
                         msgDiv._pendingContent = aiReply;
                     }
                 }
             } catch (error) {
+                if (viewAtRefresh !== viewToken) return;
                 const bubble = msgDiv.querySelector('.bubble');
                 bubble.textContent = `刷新失败: ${error.message}`;
             } finally {
                 sendBtn.disabled = false;
                 typingIndicator.style.display = 'none';
+                typingIndicator.textContent = 'AI 正在思考中...';
             }
         }
         // 渲染消息：创建头像、气泡与工具栏，并滚动到底部
@@ -1134,25 +1338,26 @@
             }
             return msgDiv;
         }
-        // 发送消息流程：读取输入→校验密钥→维护上下文→调用 DeepSeek→渲染回复
-        // 发送消息主函数
+        // 发送消息流程：普通模式走 DeepSeek；知识图谱模式走 claude -p + graphify
         async function sendMessage() {
             const text = userInput.value.trim();
             const apiKey = document.getElementById('api-key').value;
             const model = document.getElementById('model-select').value;
+            const useGraph = graphMode;
 
             if (!text) return;
-            if (!apiKey) {
+            if (!useGraph && !apiKey) {
                 alert("请先在左侧设置中输入 API Key");
                 return;
             }
 
-            // 记录发送时的话题视图，AI 返回后若已切换则丢弃
+            // 记录发送时的话题视图，回答返回后若已切换则丢弃
             const viewAtSend = viewToken;
             const userMsgEl = appendMessage('user', text);
             userInput.value = '';
             sendBtn.disabled = true;
             typingIndicator.style.display = 'block';
+            typingIndicator.textContent = useGraph ? '正在查询知识图谱…' : 'AI 正在思考中...';
 
             if (!conversationHistory.length || conversationHistory[0].role !== "system") {
                 conversationHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
@@ -1161,50 +1366,78 @@
             userMsgEl.dataset.history = '1';
             userMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
 
+            // 图谱模式只带最近几轮对话，帮助理解指代
+            const historyForGraph = conversationHistory
+                .slice(1, -1)
+                .filter(item => item.role === 'user' || item.role === 'assistant')
+                .slice(-6);
+
             // 首次发言时创建后端话题；保存失败不阻塞聊天
             const topicId = await ensureTopic(text);
             saveMessageToServer(topicId, 'user', text, userMsgEl);
 
-
             try {
-                // 3. 调用 DeepSeek API
-                const response = await fetch("https://api.deepseek.com/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        "model": model,
-                        "messages": conversationHistory
-                    })
-                });
+                if (useGraph) {
+                    const data = await apiRequest('/api/graph-ask', {
+                        method: 'POST',
+                        body: JSON.stringify({ question: text, history: historyForGraph }),
+                    });
+                    if (viewAtSend !== viewToken) return;
 
-                if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.error?.message || "请求失败");
+                    const aiReply = data.answer;
+                    const evidence = data.evidence || { nodes: [], edges: [] };
+                    const aiMsgEl = appendMessage('ai', aiReply);
+                    conversationHistory.push({ role: 'assistant', content: aiReply });
+                    aiMsgEl.dataset.history = '1';
+                    aiMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
+                    aiMsgEl.dataset.mode = 'graph';
+                    appendGraphEvidence(aiMsgEl, evidence);
+                    saveMessageToServer(topicId, 'assistant', aiReply, aiMsgEl, {
+                        mode: 'graph',
+                        evidence,
+                    });
+                } else {
+                    const response = await fetch("https://api.deepseek.com/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${apiKey}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            "model": model,
+                            "messages": conversationHistory
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.error?.message || "请求失败");
+                    }
+
+                    const data = await response.json();
+                    const aiReply = data.choices[0].message.content;
+
+                    // 用户已切换/新建话题，本次回复不再渲染和保存
+                    if (viewAtSend !== viewToken) return;
+
+                    const aiMsgEl = appendMessage('ai', aiReply);
+
+                    // 将 AI 回复加入历史上下文
+                    conversationHistory.push({ role: "assistant", content: aiReply });
+                    aiMsgEl.dataset.history = '1';
+                    aiMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
+                    saveMessageToServer(topicId, 'assistant', aiReply, aiMsgEl);
                 }
-
-                const data = await response.json();
-                const aiReply = data.choices[0].message.content;
-
-                // 用户已切换/新建话题，本次回复不再渲染和保存
-                if (viewAtSend !== viewToken) return;
-
-                const aiMsgEl = appendMessage('ai', aiReply);
-
-                // 将 AI 回复加入历史上下文
-                conversationHistory.push({ role: "assistant", content: aiReply });
-                aiMsgEl.dataset.history = '1';
-                aiMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
-                saveMessageToServer(topicId, 'assistant', aiReply, aiMsgEl);
-
             } catch (error) {
                 console.error(error);
-                appendMessage('ai', `❌ 出错了: ${error.message}`);
+                if (viewAtSend !== viewToken) return;
+                appendMessage('ai', useGraph
+                    ? `❌ 知识图谱问答失败：${error.message}`
+                    : `❌ 出错了: ${error.message}`);
             } finally {
                 sendBtn.disabled = false;
                 typingIndicator.style.display = 'none';
+                typingIndicator.textContent = 'AI 正在思考中...';
             }
         }
     </script>
