@@ -13,7 +13,7 @@
 - **前端**：原生 HTML/CSS/JavaScript，无构建流程、无打包器，文件由 Express 直接托管
 - **图谱可视化**：vis.js 4.21（CDN 引入）
 - **AI**：DeepSeek 官方 API（`https://api.deepseek.com`），模型为 `deepseek-flash`（DeepSeek-V4.1-Flash）
-- **知识图谱问答**：服务端基于 graphify 生成的 `data/graph.json`（优先 `resources/graph-rail/graphify-out/graph.json`）匹配节点并补充一层邻域关系，必要时调用 `graphify query` 做节点发现；再调用原生 `claude -p` 生成回答；claude 子进程禁用全部工具
+- **知识图谱问答**：服务端基于 graphify 生成的 `data/graph.json`（优先 `resources/graph-rail/graphify-out/graph.json`）匹配节点并补充邻域关系，必要时调用 `graphify query` 做节点发现；再从 `resources/graph-rail/*.md` 选相关章节原文做“文档落地”；最后用原生 `claude -p` 循证生成回答（先引原文标注章节号，再说明图谱关系）；claude 子进程禁用全部工具
 - **文档渲染**：marked 5、highlight.js 9、MathJax 3.2.2（均在 `vendor/` 本地托管，不依赖外网 CDN）
 
 ## 命令
@@ -66,7 +66,7 @@ curl -s -X POST http://localhost:5599/login \
 | GET | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽题，默认 10 题，响应剔除 `answer` |
 | POST | `/api/submit-test` | 服务端评分，并按题目逐条写入 `answers` 表 |
 | GET | `/api/config` | 返回 `.env` 中的 `DEEPSEEK_API_KEY`、`DEEPSEEK_API_BASE_URL` 和 `DEEPSEEK_MODEL`，供 AI 问答页使用 |
-| POST | `/api/graph-ask` | 知识图谱问答：graph.json 节点/邻域检索（必要时 `graphify query`）+ `claude -p` 生成，返回 `answer` 与 `evidence{nodes,edges}`；并发上限 2、默认 180s 超时 |
+| POST | `/api/graph-ask` | 知识图谱问答：graph.json 子图检索 → 课程 Markdown 原文片段 → `claude -p` 循证生成，返回 `answer` 与 `evidence{nodes,edges,sources}`；并发上限 2、默认 180s 超时 |
 | GET | `/api/topics?userId=` | 用户话题列表，按 `updated_at DESC`，附 `messageCount` |
 | POST | `/api/topics` | 新建话题（`userId`、`title`） |
 | PUT | `/api/topics/:id` | 重命名话题（校验 `user_id`） |
@@ -110,7 +110,7 @@ AI 问答的话题与消息按 `userId` 存在服务端 `chat_topics` / `chat_me
 - **index.html**：课程首页，导航栏根据 `localStorage` 显示登录/退出；内容公开
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
 - **knowledge-graph.html**：知识图谱。登录后加载 `./data/graph.json`（GraphRAG 输出），转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
-- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版。话题列表来自 `/api/topics`，显示创建时间（`YYYY-MM-DD HH:mm:ss`）；新建话题先创建本地草稿，首条消息发出时才 `POST /api/topics` 落库，空草稿离开即丢弃；支持切换、重命名、删除话题，并同步单条消息的删除与 AI 重新生成。`viewToken` 用于丢弃切换话题后返回的过期 AI 回复。工具栏“知识图谱”按钮是持续开关：开启后按钮加 `.active`、显示提示条，提问改走 `POST /api/graph-ask`；回答下方渲染可折叠的“知识图谱检索依据”，并用 `<mark class="kg-hl">` 高亮答案中的节点名。证据存入 assistant 消息的 `meta`，刷新后恢复；图谱失败只显示错误，不回退 DeepSeek
+- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版。话题列表来自 `/api/topics`，显示创建时间（`YYYY-MM-DD HH:mm:ss`）；新建话题先创建本地草稿，首条消息发出时才 `POST /api/topics` 落库，空草稿离开即丢弃；支持切换、重命名、删除话题，并同步单条消息的删除与 AI 重新生成。`viewToken` 用于丢弃切换话题后返回的过期 AI 回复。工具栏“知识图谱”按钮是持续开关：开启后按钮加 `.active`、显示提示条，提问改走 `POST /api/graph-ask`；回答下方渲染可折叠的“知识图谱检索依据”（节点、关系、章节原文片段），并用 `<mark class="kg-hl">` 高亮答案中的节点名。证据存入 assistant 消息的 `meta`，刷新后恢复；图谱失败只显示错误，不回退 DeepSeek
 - **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
 - **user-center.html**：个人信息编辑；学生显示「学情检测」（开发中），教师显示「学生信息」筛选表格与「教学建议」（开发中）
@@ -160,6 +160,7 @@ AI 问答的话题与消息按 `userId` 存在服务端 `chat_topics` / `chat_me
 - 前端第三方库统一放在 `vendor/`，不要引用外网 CDN（学校网络可能无法访问 jsdelivr）
 - AI 问答的 SQL 必须始终带 `user_id` 条件（话题归属）并参数化；消息操作同时校验 `topic_id`
 - 调试图谱检索可直接运行 `graphify query "发车间隔" --budget 800 --graph data/graph.json`；`claude -p` 子进程保持 `--tools ""`，不要为图省事放开 Bash/Python 权限
+- 图谱问答的“文档落地”依赖 `resources/graph-rail/*.md`：按节点 `source_file` 和问题词元匹配章节片段；移动或重命名章节文件时需同步图谱 `source_file`
 
 ## 安全考虑
 

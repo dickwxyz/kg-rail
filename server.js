@@ -696,6 +696,168 @@ function getGraphAskDir() {
   return { dir: __dirname, graphPath: "data/graph.json" };
 }
 
+// ==================== 图谱文档落地（子图节点 → 课程原文片段） ====================
+// 参考 GraphRAG 做法：只有图谱节点太抽象，需要把节点对应的章节原文作为证据一起交给模型。
+const GRAPH_QUERY_STOPWORDS = new Set([
+  "什么", "如何", "怎么", "为什么", "请问", "请", "的", "了", "吗", "呢", "吧", "啊",
+  "有", "要", "需要", "和", "与", "及", "或", "是", "在", "对", "给", "把", "被",
+  "向", "从", "用", "以", "其", "这", "那", "哪些", "哪个", "一个", "一下", "进行",
+  "应该", "可以", "主要", "包括", "关系", "区别", "内容", "方法", "问题",
+]);
+
+let zhWordSegmenter = null;
+try {
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    zhWordSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
+  }
+} catch (error) {
+  console.warn("中文分词器初始化失败，使用整句匹配:", error.message);
+}
+
+function extractQueryTerms(question) {
+  const terms = new Set();
+  if (zhWordSegmenter) {
+    for (const part of zhWordSegmenter.segment(question)) {
+      const word = part.segment.trim();
+      if (part.isWordLike && word.length >= 2 && !GRAPH_QUERY_STOPWORDS.has(word)) {
+        terms.add(word);
+      }
+    }
+  }
+  if (terms.size === 0) {
+    question.split(/[\s,，。.、；;：:？！?!]+/).forEach((part) => {
+      const word = part.trim();
+      if (word.length >= 2 && !GRAPH_QUERY_STOPWORDS.has(word)) terms.add(word);
+    });
+  }
+  return [...terms].slice(0, 20);
+}
+
+function stripMarkdownText(text) {
+  return String(text || "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// 按 Markdown 标题切章节，再把长章节切成约 1200 字的片段
+function splitMarkdownSections(file, content) {
+  const sections = [];
+  let headingPath = [];
+  let buffer = [];
+
+  const flush = () => {
+    const raw = buffer.join("\n").trim();
+    buffer = [];
+    if (!raw) return;
+    const text = stripMarkdownText(raw);
+    if (text.length < 40) return;
+    const heading = headingPath.join(" / ");
+    for (let i = 0; i < text.length; i += 1200) {
+      const chunk = text.slice(i, i + 1200).trim();
+      if (chunk.length >= 40) sections.push({ file, heading, text: chunk });
+    }
+  };
+
+  content.split(/\r?\n/).forEach((line) => {
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (!match) {
+      buffer.push(line);
+      return;
+    }
+    flush();
+    const level = match[1].length;
+    const title = match[2].trim();
+    if (level <= 1) {
+      headingPath = [title];
+    } else {
+      headingPath = headingPath.slice(0, level - 2);
+      headingPath[level - 2] = title;
+      headingPath = headingPath.filter(Boolean);
+    }
+  });
+  flush();
+  return sections;
+}
+
+let graphDocSections = null;
+
+function getGraphDocSections() {
+  if (graphDocSections) return graphDocSections;
+  graphDocSections = [];
+  const { dir } = getGraphAskDir();
+  const sourceFiles = [...new Set(GRAPH_NODES.map((node) => node.source_file).filter(Boolean))];
+  sourceFiles.forEach((file) => {
+    try {
+      const fullPath = path.join(dir, file);
+      if (!fs.existsSync(fullPath)) return;
+      const content = fs.readFileSync(fullPath, "utf8");
+      graphDocSections.push(...splitMarkdownSections(file, content));
+    } catch (error) {
+      console.warn(`读取图谱文档失败 ${file}:`, error.message);
+    }
+  });
+  if (graphDocSections.length === 0) {
+    console.warn("未找到图谱对应的课程 Markdown，图谱问答将只使用节点和关系");
+  }
+  return graphDocSections;
+}
+
+// 按问题词元重合并结合图节点来源文件，选出最相关的原文片段
+function selectGraphSources(question, contextNodes, maxSources = 4) {
+  const sections = getGraphDocSections();
+  if (sections.length === 0) return [];
+  const terms = extractQueryTerms(question);
+  if (terms.length === 0) return [];
+
+  const preferredFiles = new Set(
+    (contextNodes || []).map((node) => node.source_file).filter(Boolean)
+  );
+  const scored = [];
+  sections.forEach((section) => {
+    const haystack = `${section.heading} ${section.text}`;
+    let score = 0;
+    terms.forEach((term) => {
+      const count = haystack.split(term).length - 1;
+      if (count > 0) {
+        score += Math.min(count, 6) * (term.length >= 3 ? 2 : 1);
+        if (section.heading.includes(term)) score += 4;
+      }
+    });
+    if (score > 0) {
+      if (preferredFiles.has(section.file)) score += 3;
+      scored.push({ section, score });
+    }
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const chosen = [];
+  const perFile = new Map();
+  for (const item of scored) {
+    const count = perFile.get(item.section.file) || 0;
+    if (count >= 2) continue;
+    perFile.set(item.section.file, count + 1);
+    chosen.push(item.section);
+    if (chosen.length >= maxSources) break;
+  }
+  return chosen;
+}
+
+function formatGraphSources(sources) {
+  if (!sources.length) {
+    return "（未找到与问题匹配的课程文档原文，仅依据图谱结构回答）";
+  }
+  return sources
+    .map((source) => {
+      const heading = source.heading ? ` ${source.heading}` : "";
+      return `●《${source.file}》${heading}\n${source.text.slice(0, 900)}`;
+    })
+    .join("\n\n");
+}
+
 // 从 claude 回答中提取 EVIDENCE 行
 function extractEvidenceFromAnswer(rawAnswer) {
   const kept = [];
@@ -858,7 +1020,7 @@ async function collectGraphContext(question) {
   };
 }
 
-function runClaudeGraphAsk(question, history, graphContext) {
+function runClaudeGraphAsk(question, history, graphContext, docContext) {
   const { dir } = getGraphAskDir();
   const claudeBin = process.env.CLAUDE_BIN || "claude";
   const timeoutMs = Number(process.env.GRAPH_ASK_TIMEOUT_MS) > 0
@@ -871,18 +1033,22 @@ function runClaudeGraphAsk(question, history, graphContext) {
         .join("\n")}\n</context>\n`
     : "";
 
-  const prompt = `以下是从课程知识图谱中检索到的节点与关系：
-<graph_context>
+  const prompt = `以下是从课程知识图谱中检索到的子图，以及图谱节点对应的课程文档原文：
+【知识图谱子图】
 ${graphContext}
-</graph_context>
+
+【图谱相关文档原文】
+${docContext}
 ${contextBlock}
 问题：${question}
 
 要求：
-1. 只依据 <graph_context> 中的节点和关系回答，图谱中没有的信息不要编造。
-2. 引用关系时严格保持检索结果中的方向（source --relation--> target），不要反转；INFERRED 关系需说明是推断。
-3. 用中文简洁回答，引用相关节点名称；不要补充图谱之外的因果解释。
-4. 回答最后单独输出一行：EVIDENCE: 节点1 | 节点2 | 节点3`;
+1. 只依据上述子图与文档原文回答，不虚构节点、关系、条款或来源文件。
+2. 先引用文档原文中的定义、规定或计算方法，并在句末注明来源文件和章节号（如“（来源：3列车运行和乘客出行的基本概念.md 3.2.1）”）；再结合图谱说明概念之间的关系。
+3. 引用关系时严格保持子图中的方向（source --relation--> target），不要反转；INFERRED 关系需说明是推断。
+4. 文档与图谱都不足以回答时，明确说明缺少哪些信息，不要用一般常识补全。
+5. 用中文、结构化 Markdown 回答，紧扣问题，不展开无关内容。
+6. 回答最后单独输出一行：EVIDENCE: 节点1 | 节点2 | 节点3`;
 
   const args = [
     "-p",
@@ -892,7 +1058,7 @@ ${contextBlock}
     "--permission-prompts", "none",
     "--max-turns", "1",
     "--append-system-prompt",
-    "你是轨道交通课程的知识图谱问答助手。只能使用用户消息中提供的图谱检索结果回答，禁止调用工具或修改文件。",
+    "你是轨道交通课程的知识图谱循证问答助手。严格依据用户消息中的【知识图谱子图】和【图谱相关文档原文】回答：先引用文档原文并标注来源文件与章节号，再结合图谱说明关系；信息不足时如实说明缺少什么，禁止调用工具或修改文件。",
   ];
   if (process.env.GRAPH_CLAUDE_MODEL) {
     args.push("--model", process.env.GRAPH_CLAUDE_MODEL);
@@ -1003,13 +1169,20 @@ app.post("/api/graph-ask", async (req, res) => {
       throw graphAskError("知识图谱中没有找到与问题相关的节点，请换一种问法", 404);
     }
 
-    const { answer: rawAnswer } = await runClaudeGraphAsk(question, history, context);
+    const sources = selectGraphSources(question, contextNodes);
+    const docContext = formatGraphSources(sources);
+    const { answer: rawAnswer } = await runClaudeGraphAsk(question, history, context, docContext);
     const { answer, labels: answerLabels } = extractEvidenceFromAnswer(rawAnswer);
     if (!answer) {
       throw graphAskError("claude 返回了空答案", 500);
     }
 
     const evidence = buildGraphEvidence(answerLabels, answer, question, contextNodes);
+    evidence.sources = sources.map((source) => ({
+      file: source.file,
+      heading: source.heading,
+      snippet: source.text.slice(0, 200),
+    }));
 
     res.status(200).json({ success: true, answer, evidence });
   } catch (error) {

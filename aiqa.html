@@ -262,6 +262,13 @@
         .kg-edge { margin: 3px 0; color: #555; }
         .kg-edge .kg-rel { color: #8a6d00; font-weight: 600; }
         .kg-conf { color: #999; font-size: 0.72rem; margin-left: 4px; }
+        .kg-source-title { margin-top: 8px; font-weight: 600; color: #2c3e50; }
+        .kg-source {
+            margin: 6px 0; padding: 6px 8px; background: #f7f9fb;
+            border-left: 3px solid #a3d5ff; border-radius: 4px;
+        }
+        .kg-source-head { font-size: 0.78rem; color: #2c3e50; font-weight: 600; }
+        .kg-source-snippet { font-size: 0.78rem; color: #666; margin-top: 2px; }
         mark.kg-hl { background: #fff3bf; color: inherit; padding: 0 1px; border-radius: 2px; }
 
         /* 卡片式布局 */
@@ -663,13 +670,14 @@
 
             const nodes = evidence && Array.isArray(evidence.nodes) ? evidence.nodes : [];
             const edges = evidence && Array.isArray(evidence.edges) ? evidence.edges : [];
-            if (!nodes.length && !edges.length) return;
+            const sources = evidence && Array.isArray(evidence.sources) ? evidence.sources : [];
+            if (!nodes.length && !edges.length && !sources.length) return;
 
             const details = document.createElement('details');
             details.className = 'graph-evidence';
             details.open = true;
             const summary = document.createElement('summary');
-            summary.textContent = `知识图谱检索依据（${nodes.length} 个节点 / ${edges.length} 条关系）`;
+            summary.textContent = `知识图谱检索依据（${nodes.length} 个节点 / ${edges.length} 条关系 / ${sources.length} 份文档原文）`;
             details.appendChild(summary);
 
             if (nodes.length) {
@@ -706,6 +714,26 @@
                 row.appendChild(confidence);
                 details.appendChild(row);
             });
+
+            if (sources.length) {
+                const sourceTitle = document.createElement('div');
+                sourceTitle.className = 'kg-source-title';
+                sourceTitle.textContent = '文档原文依据';
+                details.appendChild(sourceTitle);
+                sources.forEach(source => {
+                    const row = document.createElement('div');
+                    row.className = 'kg-source';
+                    const head = document.createElement('div');
+                    head.className = 'kg-source-head';
+                    head.textContent = `《${source.file}》${source.heading ? ' ' + source.heading : ''}`;
+                    const snippet = document.createElement('div');
+                    snippet.className = 'kg-source-snippet';
+                    snippet.textContent = source.snippet || '';
+                    row.appendChild(head);
+                    row.appendChild(snippet);
+                    details.appendChild(row);
+                });
+            }
 
             const toolbar = bubble.querySelector('.msg-toolbar');
             bubble.insertBefore(details, toolbar || null);
