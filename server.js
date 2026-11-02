@@ -42,19 +42,43 @@ process.on('uncaughtException', (error) => {
 });
 
 // 数据库初始化：连接本地 SQLite 文件（user.db）
-const db = new sqlite3.Database("./user.db", (err) => { 
+const db = new sqlite3.Database("./user.db", (err) => {
   if (err) console.error("数据库连接失败:", err.message);
-  else console.log("已连接到 SQLite 数据库");   
+  else console.log("已连接到 SQLite 数据库");
 });
+
+// AI 问答会话表：启动时幂等创建，避免依赖手工建表
+// created_at / updated_at 存毫秒时间戳，前端按本地时区格式化到秒
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS chat_topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_chat_topics_user
+          ON chat_topics(user_id, updated_at DESC)`);
+  db.run(`CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+    content TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_chat_messages_topic
+          ON chat_messages(topic_id, id)`);
+});
+
 // 中间件与跨域配置：启用 CORS、解析 JSON 请求体、统一响应头
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   })
 );
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "1mb" }));
 
 // 静态资源安全策略：禁止通过静态服务下载数据库、环境变量、服务端源码和配置目录
 function isBlockedStaticPath(pathname) {
@@ -111,10 +135,307 @@ app.get("/api/config", (req, res) => {
     model: process.env.DEEPSEEK_MODEL || "deepseek-flash",
   });
 });
+// ==================== AI 问答会话接口 ====================
+// 项目没有服务端登录态，用户身份只能信任前端传入的 userId；
+// 所有读写都附带 user_id 条件，避免仅凭 id 访问他人话题。
+
+// 解析正整数 id，非法返回 null
+function parsePositiveInt(value) {
+  const n = parseInt(value, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// 从 query 或 body 中取 userId
+function getUserIdFrom(req) {
+  const raw = req.body && req.body.userId !== undefined ? req.body.userId : req.query.userId;
+  return raw === undefined || raw === null ? "" : String(raw).trim();
+}
+
+// 校验并规范化标题与消息内容
+function normalizeText(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text || text.length > maxLength) return null;
+  return text;
+}
+
+// 查询指定用户拥有的话题；不存在或不属于该用户时返回 null
+function getOwnedTopic(topicId, userId, callback) {
+  db.get(
+    "SELECT id, user_id, title, created_at, updated_at FROM chat_topics WHERE id = ? AND user_id = ?",
+    [topicId, userId],
+    callback
+  );
+}
+
+function toTopicDto(row, messageCount) {
+  const dto = {
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+  if (messageCount !== undefined) dto.messageCount = messageCount;
+  return dto;
+}
+
+function toMessageDto(row) {
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    createdAt: row.created_at,
+  };
+}
+
+// 话题列表：按最近活跃排序，附带消息条数
+app.get("/api/topics", (req, res) => {
+  const userId = getUserIdFrom(req);
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  const sql = `
+    SELECT t.id, t.title, t.created_at, t.updated_at,
+           (SELECT COUNT(*) FROM chat_messages m WHERE m.topic_id = t.id) AS message_count
+    FROM chat_topics t
+    WHERE t.user_id = ?
+    ORDER BY t.updated_at DESC, t.id DESC
+  `;
+  db.all(sql, [userId], (err, rows) => {
+    if (err) {
+      console.error("查询话题列表失败:", err.message);
+      return res.status(500).json({ success: false, message: "查询话题失败！" });
+    }
+    res.status(200).json({
+      success: true,
+      topics: rows.map((row) => toTopicDto(row, row.message_count)),
+    });
+  });
+});
+
+// 新建话题
+app.post("/api/topics", (req, res) => {
+  const userId = getUserIdFrom(req);
+  const title = normalizeText(req.body && req.body.title, 50);
+  if (!userId || !title) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  const now = Date.now();
+  db.run(
+    "INSERT INTO chat_topics (user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+    [userId, title, now, now],
+    function (err) {
+      if (err) {
+        console.error("创建话题失败:", err.message);
+        return res.status(500).json({ success: false, message: "创建话题失败！" });
+      }
+      res.status(200).json({
+        success: true,
+        topic: {
+          id: this.lastID,
+          title,
+          createdAt: now,
+          updatedAt: now,
+          messageCount: 0,
+        },
+      });
+    }
+  );
+});
+
+// 重命名话题
+app.put("/api/topics/:id", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const userId = getUserIdFrom(req);
+  const title = normalizeText(req.body && req.body.title, 50);
+  if (!topicId || !userId || !title) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  db.run(
+    "UPDATE chat_topics SET title = ? WHERE id = ? AND user_id = ?",
+    [title, topicId, userId],
+    function (err) {
+      if (err) {
+        console.error("重命名话题失败:", err.message);
+        return res.status(500).json({ success: false, message: "重命名失败！" });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ success: false, message: "话题不存在！" });
+      }
+      getOwnedTopic(topicId, userId, (err2, row) => {
+        if (err2 || !row) {
+          return res.status(404).json({ success: false, message: "话题不存在！" });
+        }
+        res.status(200).json({ success: true, topic: toTopicDto(row) });
+      });
+    }
+  );
+});
+
+// 删除话题及其全部消息
+app.delete("/api/topics/:id", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const userId = getUserIdFrom(req);
+  if (!topicId || !userId) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  getOwnedTopic(topicId, userId, (err, topic) => {
+    if (err) {
+      console.error("查询话题失败:", err.message);
+      return res.status(500).json({ success: false, message: "删除话题失败！" });
+    }
+    if (!topic) {
+      return res.status(404).json({ success: false, message: "话题不存在！" });
+    }
+    db.serialize(() => {
+      db.run("DELETE FROM chat_messages WHERE topic_id = ?", [topicId], (err2) => {
+        if (err2) console.error("删除话题消息失败:", err2.message);
+      });
+      db.run("DELETE FROM chat_topics WHERE id = ? AND user_id = ?", [topicId, userId], (err3) => {
+        if (err3) {
+          console.error("删除话题失败:", err3.message);
+          return res.status(500).json({ success: false, message: "删除话题失败！" });
+        }
+        res.status(200).json({ success: true, message: "话题已删除！" });
+      });
+    });
+  });
+});
+
+// 获取话题下的全部消息（按写入顺序）
+app.get("/api/topics/:id/messages", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const userId = getUserIdFrom(req);
+  if (!topicId || !userId) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  getOwnedTopic(topicId, userId, (err, topic) => {
+    if (err) {
+      console.error("查询话题失败:", err.message);
+      return res.status(500).json({ success: false, message: "查询消息失败！" });
+    }
+    if (!topic) {
+      return res.status(404).json({ success: false, message: "话题不存在！" });
+    }
+    db.all(
+      "SELECT id, role, content, created_at FROM chat_messages WHERE topic_id = ? ORDER BY id ASC",
+      [topicId],
+      (err2, rows) => {
+        if (err2) {
+          console.error("查询消息失败:", err2.message);
+          return res.status(500).json({ success: false, message: "查询消息失败！" });
+        }
+        res.status(200).json({
+          success: true,
+          topic: toTopicDto(topic),
+          messages: rows.map(toMessageDto),
+        });
+      }
+    );
+  });
+});
+
+// 追加一条消息，并更新话题的最近活跃时间
+app.post("/api/topics/:id/messages", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const userId = getUserIdFrom(req);
+  const role = req.body && req.body.role;
+  const content = normalizeText(req.body && req.body.content, 20000);
+  if (!topicId || !userId || !content || (role !== "user" && role !== "assistant")) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  getOwnedTopic(topicId, userId, (err, topic) => {
+    if (err) {
+      console.error("查询话题失败:", err.message);
+      return res.status(500).json({ success: false, message: "保存消息失败！" });
+    }
+    if (!topic) {
+      return res.status(404).json({ success: false, message: "话题不存在！" });
+    }
+    const now = Date.now();
+    db.run(
+      "INSERT INTO chat_messages (topic_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+      [topicId, role, content, now],
+      function (err2) {
+        if (err2) {
+          console.error("保存消息失败:", err2.message);
+          return res.status(500).json({ success: false, message: "保存消息失败！" });
+        }
+        db.run("UPDATE chat_topics SET updated_at = ? WHERE id = ?", [now, topicId], (err3) => {
+          if (err3) console.error("更新话题时间失败:", err3.message);
+          res.status(200).json({
+            success: true,
+            message: { id: this.lastID, role, content, createdAt: now },
+          });
+        });
+      }
+    );
+  });
+});
+
+// 覆盖某条消息（AI 重新生成时使用）
+app.put("/api/topics/:id/messages/:messageId", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const messageId = parsePositiveInt(req.params.messageId);
+  const userId = getUserIdFrom(req);
+  const content = normalizeText(req.body && req.body.content, 20000);
+  if (!topicId || !messageId || !userId || !content) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  getOwnedTopic(topicId, userId, (err, topic) => {
+    if (err || !topic) {
+      return res.status(404).json({ success: false, message: "话题不存在！" });
+    }
+    db.run(
+      "UPDATE chat_messages SET content = ? WHERE id = ? AND topic_id = ?",
+      [content, messageId, topicId],
+      function (err2) {
+        if (err2) {
+          console.error("更新消息失败:", err2.message);
+          return res.status(500).json({ success: false, message: "更新消息失败！" });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ success: false, message: "消息不存在！" });
+        }
+        res.status(200).json({ success: true, message: "消息已更新！" });
+      }
+    );
+  });
+});
+
+// 删除单条消息
+app.delete("/api/topics/:id/messages/:messageId", (req, res) => {
+  const topicId = parsePositiveInt(req.params.id);
+  const messageId = parsePositiveInt(req.params.messageId);
+  const userId = getUserIdFrom(req);
+  if (!topicId || !messageId || !userId) {
+    return res.status(400).json({ success: false, message: "参数不完整！" });
+  }
+  getOwnedTopic(topicId, userId, (err, topic) => {
+    if (err || !topic) {
+      return res.status(404).json({ success: false, message: "话题不存在！" });
+    }
+    db.run(
+      "DELETE FROM chat_messages WHERE id = ? AND topic_id = ?",
+      [messageId, topicId],
+      function (err2) {
+        if (err2) {
+          console.error("删除消息失败:", err2.message);
+          return res.status(500).json({ success: false, message: "删除消息失败！" });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ success: false, message: "消息不存在！" });
+        }
+        res.status(200).json({ success: true, message: "消息已删除！" });
+      }
+    );
+  });
+});
+
 // 预检请求处理（符合跨域场景的浏览器预检）
 // 为所有路由处理预检请求
 app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Content-Type");
   res.sendStatus(200);

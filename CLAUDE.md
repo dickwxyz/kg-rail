@@ -44,7 +44,7 @@ curl -s -X POST http://localhost:5599/login \
 
 ### server.js 结构
 
-单文件服务，按顺序为：数据库初始化 → CORS/静态中间件 → 注册 → 登录 → 用户信息 → 学生查询 → 测试题目 → 提交测试 → 错误处理 → 启动监听。
+单文件服务，按顺序为：数据库初始化（含 AI 问答表幂等创建）→ CORS/静态中间件 → AI 配置 → 话题/消息接口 → 注册 → 登录 → 用户信息 → 学生查询 → 测试题目 → 提交测试 → 错误处理 → 启动监听。
 
 - 环境变量：启动时用内置的 `loadEnvFile()` 读取项目根目录 `.env`（零依赖，不覆盖已有环境变量），主要用于 `DEEPSEEK_API_KEY`
 - 静态安全：`express.static` 之前有拦截中间件，拒绝 `.db/.sqlite`、`.env*`、`.git/`、`.claude/`、`.vscode/`、`server.js`、`package(-lock).json`、`node_modules/`，命中返回 404
@@ -65,6 +65,14 @@ curl -s -X POST http://localhost:5599/login \
 | GET | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽题，默认 10 题，响应剔除 `answer` |
 | POST | `/api/submit-test` | 服务端评分，并按题目逐条写入 `answers` 表 |
 | GET | `/api/config` | 返回 `.env` 中的 `DEEPSEEK_API_KEY`、`DEEPSEEK_API_BASE_URL` 和 `DEEPSEEK_MODEL`，供 AI 问答页使用 |
+| GET | `/api/topics?userId=` | 用户话题列表，按 `updated_at DESC`，附 `messageCount` |
+| POST | `/api/topics` | 新建话题（`userId`、`title`） |
+| PUT | `/api/topics/:id` | 重命名话题（校验 `user_id`） |
+| DELETE | `/api/topics/:id?userId=` | 删除话题及其全部消息 |
+| GET | `/api/topics/:id/messages?userId=` | 话题下的全部消息（按 `id ASC`） |
+| POST | `/api/topics/:id/messages` | 追加消息（`role` 仅 `user`/`assistant`），并更新话题 `updated_at` |
+| PUT | `/api/topics/:id/messages/:messageId` | 覆盖消息内容（AI 重新生成） |
+| DELETE | `/api/topics/:id/messages/:messageId?userId=` | 删除单条消息 |
 
 注册时按前端提交的 `userType`（`student`/`teacher`）与 ID 长度共同判定表名；登录时仅按 ID 长度判定。登录返回的 `role` 为中文「教师」「本科生」「研究生」，前端用户中心依赖该值切换侧边栏。
 
@@ -76,9 +84,11 @@ curl -s -X POST http://localhost:5599/login \
 - **teacher**：`id`（主键，4 位数字）、`name`、`phone`、`email`、`password`
 - **questions**：`id`、`question`、`options`（JSON 字符串）、`answer`、`type`（单选题/填空题/简答题/计算题）、`lesson`、`difficulty`、`chapter`、`knowledge_point`
 - **answers**：`id`、`test_id`、`datetime`、`user_id`、`question_id`、`input_answer`、`accuracy`
+- **chat_topics**：`id`、`user_id`、`title`、`created_at`、`updated_at`（毫秒时间戳）
+- **chat_messages**：`id`、`topic_id`、`role`（`user`/`assistant`）、`content`、`created_at`（毫秒时间戳）
 - **degree**：`x`、`y`，历史遗留的图谱坐标表，当前代码没有使用
 
-`server.js` 不建表；克隆仓库后没有 `user.db`，需自行准备带表结构的数据库，否则接口会因缺表报错。
+`server.js` 仅幂等创建 `chat_topics` / `chat_messages`（`CREATE TABLE IF NOT EXISTS`）；其余表不建。克隆仓库后没有 `user.db`，需自行准备带表结构的数据库，否则登录、注册、测试等接口会因缺表报错。
 
 ### 评分逻辑（`/api/submit-test`）
 
@@ -89,14 +99,16 @@ curl -s -X POST http://localhost:5599/login \
 
 ### 会话管理
 
-无服务端会话。登录成功后前端将 `userInfo` 写入 `localStorage`，各页面加载时读取以切换登录/用户 UI；退出即删除该键。测试页还会把当前测试状态写入 `localStorage` 的 `currentTest`，保留 24 小时。
+无服务端登录会话。登录成功后前端将 `userInfo` 写入 `localStorage`，各页面加载时读取以切换登录/用户 UI；退出即删除该键。测试页还会把当前测试状态写入 `localStorage` 的 `currentTest`，保留 24 小时。
+
+AI 问答的话题与消息按 `userId` 存在服务端 `chat_topics` / `chat_messages` 表中，刷新或换设备登录同一账号后可恢复。话题接口同样只信任请求里的 `userId`，所有 SQL 都带 `user_id` 条件做归属校验，但知道他人学号/工号仍可越权访问。
 
 ### 前端页面
 
 - **index.html**：课程首页，导航栏根据 `localStorage` 显示登录/退出；内容公开
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
 - **knowledge-graph.html**：知识图谱。登录后加载 `./data/graph.json`（GraphRAG 输出），转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
-- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版
+- **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版。话题列表来自 `/api/topics`，显示创建时间（`YYYY-MM-DD HH:mm:ss`）；新建话题先创建本地草稿，首条消息发出时才 `POST /api/topics` 落库，空草稿离开即丢弃；支持切换、重命名、删除话题，并同步单条消息的删除与 AI 重新生成。`viewToken` 用于丢弃切换话题后返回的过期 AI 回复
 - **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
 - **user-center.html**：个人信息编辑；学生显示「学情检测」（开发中），教师显示「学生信息」筛选表格与「教学建议」（开发中）
@@ -144,6 +156,7 @@ curl -s -X POST http://localhost:5599/login \
 - 中文内容与注释为项目惯例，新增文档和注释默认使用中文
 - `resources/`、`user.db`、`.env`、`node_modules/` 均不纳入版本库，不要提交；新增密钥一律写入 `.env` 并同步更新 `.env.example`
 - 前端第三方库统一放在 `vendor/`，不要引用外网 CDN（学校网络可能无法访问 jsdelivr）
+- AI 问答的 SQL 必须始终带 `user_id` 条件（话题归属）并参数化；消息操作同时校验 `topic_id`
 
 ## 安全考虑
 
@@ -151,6 +164,6 @@ curl -s -X POST http://localhost:5599/login \
 - **密码明文**：数据库中明文存储、明文比对，应改为 bcrypt 等加盐哈希
 - **DeepSeek Key 下发**：密钥已从源码移入 `.env`，经 `/api/config` 明文返回给任何访问者，仅适用于教学场景；生产环境应改为服务端代理
 - **CORS 全开放**：`origin: "*"`，任意来源可调用接口
-- **无鉴权**：接口只信任请求中的 `userId`，可越权读取或修改他人资料；`/user-info` 还会返回密码字段
+- **无鉴权**：接口只信任请求中的 `userId`，可越权读取或修改他人资料；`/user-info` 还会返回密码字段。AI 问答话题接口已按 `user_id` 校验归属，但知道他人学号/工号仍可读写其话题
 - **SQL 拼接**：表名与字段名由长度判定或白名单控制，值均使用参数化占位符；新增动态 SQL 时保持白名单 + 参数化
 - **无速率限制、未强制 HTTPS**

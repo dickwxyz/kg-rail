@@ -78,12 +78,30 @@
         .history-list { list-style: none; }
         .history-list li {
             padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer;
-            transition: background 0.2s; border-radius: 4px;
+            transition: background 0.2s; border-radius: 4px; position: relative;
         }
         .history-list li:hover { background-color: #f5f5f5; }
         .history-list li.active { background-color: #e9f5ff; border-left: 3px solid #f1c40f; }
         .history-list .date { font-size: 0.75rem; color: #999; display: block; }
-        .history-list .topic { font-size: 0.9rem; font-weight: 500; color: #333; }
+        .history-list .topic {
+            font-size: 0.9rem; font-weight: 500; color: #333;
+            display: block; padding-right: 44px; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        /* 话题操作按钮：悬停或选中时显示 */
+        .topic-actions { position: absolute; right: 6px; top: 6px; display: none; gap: 2px; }
+        .history-list li:hover .topic-actions,
+        .history-list li.active .topic-actions { display: flex; }
+        .topic-btn {
+            border: none; background: transparent; color: #999; cursor: pointer;
+            font-size: 0.85rem; line-height: 1; padding: 2px 4px; border-radius: 3px;
+        }
+        .topic-btn:hover { background: #e0e0e0; color: #333; }
+        .history-empty {
+            color: #aaa; font-size: 0.85rem; text-align: center;
+            padding: 12px 0; cursor: default;
+        }
+        .history-empty:hover { background: transparent; }
 
         /* --- 右侧聊天区 --- */
         .chat-area {
@@ -313,20 +331,7 @@
 
             <div class="sidebar-section">
                 <h3>历史话题</h3>
-                <ul class="history-list">
-                    <li class="active">
-                        <span class="date">2024-05-22</span>
-                        <span class="topic">当前对话</span>
-                    </li>
-                    <li>
-                        <span class="date">2024-05-21</span>
-                        <span class="topic">列车运行图编制原理</span>
-                    </li>
-                    <li>
-                        <span class="date">2024-05-20</span>
-                        <span class="topic">城市轨道交通客流预测</span>
-                    </li>
-                </ul>
+                <ul class="history-list" id="history-list"></ul>
             </div>
         </aside>
 
@@ -409,6 +414,7 @@
         window.onload = function () {
             checkLogin();
             loadApiConfig();
+            if (getUserId()) loadTopics();
         };
 
         // 从服务端读取 DeepSeek 配置（密钥保存在 .env，不写入前端源码）
@@ -427,6 +433,7 @@
         // --- 2. AI 问答逻辑 ---
         
         const chatLog = document.getElementById('chat-log');
+        const historyList = document.getElementById('history-list');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const typingIndicator = document.getElementById('typing-indicator');
@@ -435,6 +442,65 @@
         
         // 存储对话上下文
         let conversationHistory = [];
+
+        // --- 话题与会话状态 ---
+        const SYSTEM_PROMPT = "你是轨道交通领域的专家，能够回答相关专业性问题，语言能够体现专业性和逻辑性。";
+        let currentTopicId = null;      // 数据库话题 id；null 表示尚未落库的草稿
+        let currentTopicCreatedAt = 0;  // 当前话题创建时间（毫秒）
+        let currentTopicDraft = false;  // 当前是否为空草稿
+        let viewToken = 0;              // 切换/新建话题时自增，用于丢弃过期的异步回复
+        let persistQueue = Promise.resolve(); // 串行化消息写入，保证顺序
+
+        const WELCOME_HTML = `
+            <div class="message ai">
+                <div class="avatar">AI</div>
+                <div class="bubble">你好！我是轨道交通运营管理课程助手。请选择模型并输入你的问题。</div>
+            </div>`;
+
+        // 读取当前登录用户 id
+        function getUserId() {
+            try {
+                const user = JSON.parse(localStorage.getItem("userInfo") || "null");
+                return user && user.id ? String(user.id) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 毫秒时间戳 → 本地时区 YYYY-MM-DD HH:mm:ss
+        function formatDateTime(ms) {
+            const d = new Date(Number(ms) || Date.now());
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        // 转义用户输入，避免渲染历史消息时触发 XSS
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // 统一的接口请求封装：非 2xx 或 success=false 时抛出错误
+        async function apiRequest(url, options = {}) {
+            const response = await fetch(url, {
+                headers: { "Content-Type": "application/json" },
+                ...options,
+            });
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (e) {
+                // 非 JSON 响应（例如 404 页面）
+            }
+            if (!response.ok || !data || !data.success) {
+                throw new Error((data && data.message) || `请求失败（${response.status}）`);
+            }
+            return data;
+        }
 
         // 统一公式定界符：\[...\] → $$...$$，\(...\) → $...$
         // 必须在 Markdown 渲染前处理，否则反斜杠会被 Markdown 转义掉
@@ -496,28 +562,351 @@
             panel.style.display = 'none';
         });
 
-        // 新建话题
+        // ==================== 话题列表与会话持久化 ====================
+
+        // 创建一条话题列表项
+        function createHistoryItem(topic, isDraft = false) {
+            const li = document.createElement('li');
+            li.dataset.topicId = topic.id == null ? '' : String(topic.id);
+            if (isDraft) li.dataset.draft = '1';
+
+            const dateEl = document.createElement('span');
+            dateEl.className = 'date';
+            dateEl.textContent = formatDateTime(topic.createdAt || Date.now());
+
+            const titleEl = document.createElement('span');
+            titleEl.className = 'topic';
+            titleEl.textContent = topic.title || '新话题';
+            titleEl.title = titleEl.textContent;
+
+            const actions = document.createElement('span');
+            actions.className = 'topic-actions';
+            const renameBtn = document.createElement('button');
+            renameBtn.type = 'button';
+            renameBtn.className = 'topic-btn';
+            renameBtn.dataset.action = 'rename';
+            renameBtn.title = '重命名';
+            renameBtn.textContent = '✎';
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'topic-btn';
+            deleteBtn.dataset.action = 'delete';
+            deleteBtn.title = '删除';
+            deleteBtn.textContent = '×';
+            actions.appendChild(renameBtn);
+            actions.appendChild(deleteBtn);
+
+            li.appendChild(dateEl);
+            li.appendChild(titleEl);
+            li.appendChild(actions);
+            return li;
+        }
+
+        // 列表为空时显示占位
+        function updateHistoryEmptyState() {
+            if (historyList.querySelector('li')) return;
+            const empty = document.createElement('li');
+            empty.className = 'history-empty';
+            empty.textContent = '暂无历史话题';
+            historyList.appendChild(empty);
+        }
+
+        // 移除尚未落库的空草稿
+        function removeDraftItem() {
+            const draft = historyList.querySelector('li[data-draft="1"]');
+            if (draft) draft.remove();
+            updateHistoryEmptyState();
+        }
+
+        // 高亮当前话题
+        function setActiveTopicItem(topicId) {
+            Array.from(historyList.querySelectorAll('li')).forEach(li => {
+                li.classList.toggle('active', li.dataset.topicId === String(topicId));
+            });
+        }
+
+        // 渲染后端返回的话题列表
+        function renderTopicList(topics) {
+            historyList.innerHTML = '';
+            (topics || []).forEach(topic => historyList.appendChild(createHistoryItem(topic)));
+            updateHistoryEmptyState();
+        }
+
+        // 加载当前用户的话题列表，并默认打开最近更新的一条
+        async function loadTopics() {
+            const userId = getUserId();
+            if (!userId) return;
+            const token = viewToken;
+            try {
+                const data = await apiRequest(`/api/topics?userId=${encodeURIComponent(userId)}`);
+                if (token !== viewToken) return; // 加载期间用户已新建/切换话题
+                const topics = data.topics || [];
+                renderTopicList(topics);
+                if (topics.length > 0) {
+                    await selectTopic(topics[0].id);
+                }
+            } catch (error) {
+                console.warn('加载历史话题失败:', error);
+            }
+        }
+
+        // 切换话题：加载消息并重建对话上下文
+        async function selectTopic(topicId) {
+            if (currentTopicDraft && currentTopicId === null) {
+                removeDraftItem();
+            }
+            viewToken++;
+            const token = viewToken;
+            try {
+                const data = await apiRequest(
+                    `/api/topics/${topicId}/messages?userId=${encodeURIComponent(getUserId())}`
+                );
+                if (token !== viewToken) return;
+                currentTopicId = topicId;
+                currentTopicDraft = false;
+                currentTopicCreatedAt = data.topic.createdAt;
+                setActiveTopicItem(topicId);
+                renderConversation(data.messages || []);
+            } catch (error) {
+                console.warn('加载话题消息失败:', error);
+            }
+        }
+
+        // 用后端消息重建聊天区与 conversationHistory（system 置于下标 0）
+        function renderConversation(messages) {
+            chatLog.innerHTML = '';
+            if (!messages.length) {
+                chatLog.innerHTML = WELCOME_HTML;
+                conversationHistory = [];
+                return;
+            }
+            conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+            messages.forEach((message, index) => {
+                const role = message.role === 'assistant' ? 'ai' : 'user';
+                const el = appendMessage(role, message.content, false);
+                el.dataset.convIndex = String(index + 1);
+                el.dataset.msgId = String(message.id);
+            });
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        // 重置为欢迎界面（用于删除当前话题后）
+        function resetConversationView() {
+            viewToken++;
+            currentTopicId = null;
+            currentTopicDraft = false;
+            currentTopicCreatedAt = 0;
+            conversationHistory = [];
+            chatLog.innerHTML = WELCOME_HTML;
+            Array.from(historyList.querySelectorAll('li')).forEach(li => li.classList.remove('active'));
+        }
+
+        // 新建话题：仅在前端创建草稿，发出第一条消息时才写入数据库
         function newTopic() {
+            viewToken++;
+            if (currentTopicDraft && currentTopicId === null) {
+                removeDraftItem();
+            }
+            currentTopicId = null;
+            currentTopicDraft = true;
+            currentTopicCreatedAt = Date.now();
+            conversationHistory = [];
             chatLog.innerHTML = `
                 <div class="message ai">
                     <div class="avatar">AI</div>
                     <div class="bubble">话题已重置。请问有什么新问题？</div>
-                </div>
-            `;
-            conversationHistory = [];
-            // 重置左侧话题列表 添加时间
-            const list = document.querySelector('.history-list');
-            if (list) {
-                Array.from(list.querySelectorAll('li')).forEach(li => li.classList.remove('active'));
-                const li = document.createElement('li');
-                li.className = 'active';
-                const d = new Date();
-                const pad = n => String(n).padStart(2, '0');
-                const nowStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-                li.innerHTML = `<span class="date">${nowStr}</span><span class="topic">当前对话</span>`;
-                list.insertBefore(li, list.firstChild);
+                </div>`;
+
+            const placeholder = historyList.querySelector('.history-empty');
+            if (placeholder) placeholder.remove();
+            const li = createHistoryItem(
+                { id: null, title: '新话题', createdAt: currentTopicCreatedAt },
+                true
+            );
+            li.classList.add('active');
+            historyList.insertBefore(li, historyList.firstChild);
+            Array.from(historyList.querySelectorAll('li')).forEach(item => {
+                if (item !== li) item.classList.remove('active');
+            });
+        }
+
+        // 首次发言时把草稿写入数据库；返回话题 id，失败返回 null
+        async function ensureTopic(firstText) {
+            if (currentTopicId) return currentTopicId;
+            const userId = getUserId();
+            if (!userId) return null;
+            const token = viewToken;
+
+            const trimmed = firstText.trim();
+            const title = trimmed.slice(0, 20) + (trimmed.length > 20 ? '…' : '');
+            try {
+                const data = await apiRequest('/api/topics', {
+                    method: 'POST',
+                    body: JSON.stringify({ userId, title }),
+                });
+                const topic = data.topic;
+                // 创建期间用户已切换/新建话题：只把新话题加入列表，不覆盖当前视图
+                if (token !== viewToken) {
+                    const placeholder = historyList.querySelector('.history-empty');
+                    if (placeholder) placeholder.remove();
+                    historyList.insertBefore(createHistoryItem(topic), historyList.firstChild);
+                    return topic.id;
+                }
+                currentTopicId = topic.id;
+                currentTopicDraft = false;
+                currentTopicCreatedAt = topic.createdAt;
+
+                const draft = historyList.querySelector('li[data-draft="1"]');
+                if (draft) {
+                    draft.dataset.topicId = String(topic.id);
+                    delete draft.dataset.draft;
+                    const topicEl = draft.querySelector('.topic');
+                    if (topicEl) {
+                        topicEl.textContent = topic.title;
+                        topicEl.title = topic.title;
+                    }
+                    const dateEl = draft.querySelector('.date');
+                    if (dateEl) dateEl.textContent = formatDateTime(topic.createdAt);
+                    draft.classList.add('active');
+                } else {
+                    // 没有草稿项时（例如删除当前话题后直接输入）补一条
+                    const placeholder = historyList.querySelector('.history-empty');
+                    if (placeholder) placeholder.remove();
+                    const li = createHistoryItem(topic);
+                    li.classList.add('active');
+                    historyList.insertBefore(li, historyList.firstChild);
+                }
+                setActiveTopicItem(topic.id);
+                return topic.id;
+            } catch (error) {
+                console.warn('创建话题失败，本轮对话将不会保存:', error);
+                return null;
             }
         }
+
+        // 串行保存一条消息；保存成功后把消息 id 绑定到 DOM
+        function saveMessageToServer(topicId, role, content, msgEl) {
+            if (!topicId) return Promise.resolve(null);
+            const task = persistQueue.then(async () => {
+                try {
+                    const data = await apiRequest(`/api/topics/${topicId}/messages`, {
+                        method: 'POST',
+                        body: JSON.stringify({ userId: getUserId(), role, content }),
+                    });
+                    const msgId = data.message.id;
+                    if (msgEl) {
+                        msgEl.dataset.msgId = String(msgId);
+                        // 保存期间被删除或刷新，补发对应操作
+                        if (msgEl._pendingDelete) {
+                            await deleteMessageOnServer(topicId, msgId);
+                            return null;
+                        }
+                        if (typeof msgEl._pendingContent === 'string') {
+                            await updateMessageOnServer(topicId, msgId, msgEl._pendingContent);
+                            msgEl._pendingContent = null;
+                        }
+                    }
+                    return msgId;
+                } catch (error) {
+                    console.warn('保存消息失败:', error);
+                    return null;
+                }
+            });
+            persistQueue = task.then(() => undefined, () => undefined);
+            return task;
+        }
+
+        async function deleteMessageOnServer(topicId, msgId) {
+            if (!topicId || !msgId) return;
+            try {
+                await apiRequest(
+                    `/api/topics/${topicId}/messages/${msgId}?userId=${encodeURIComponent(getUserId())}`,
+                    { method: 'DELETE' }
+                );
+            } catch (error) {
+                console.warn('删除消息失败:', error);
+            }
+        }
+
+        async function updateMessageOnServer(topicId, msgId, content) {
+            if (!topicId || !msgId) return;
+            try {
+                await apiRequest(`/api/topics/${topicId}/messages/${msgId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ userId: getUserId(), content }),
+                });
+            } catch (error) {
+                console.warn('更新消息失败:', error);
+            }
+        }
+
+        // 重命名话题
+        async function renameTopic(topicId) {
+            const li = historyList.querySelector(`li[data-topic-id="${topicId}"]`);
+            const titleEl = li ? li.querySelector('.topic') : null;
+            const input = prompt('重命名话题', titleEl ? titleEl.textContent : '');
+            if (input === null) return;
+            const title = input.trim();
+            if (!title) {
+                alert('话题标题不能为空');
+                return;
+            }
+            if (title.length > 50) {
+                alert('话题标题不能超过 50 个字符');
+                return;
+            }
+            try {
+                await apiRequest(`/api/topics/${topicId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ userId: getUserId(), title }),
+                });
+                if (titleEl) {
+                    titleEl.textContent = title;
+                    titleEl.title = title;
+                }
+            } catch (error) {
+                alert(`重命名失败：${error.message}`);
+            }
+        }
+
+        // 删除话题及其全部消息
+        async function deleteTopic(topicId) {
+            if (!confirm('确定删除该话题及全部聊天记录？')) return;
+            try {
+                await apiRequest(
+                    `/api/topics/${topicId}?userId=${encodeURIComponent(getUserId())}`,
+                    { method: 'DELETE' }
+                );
+                const li = historyList.querySelector(`li[data-topic-id="${topicId}"]`);
+                if (li) li.remove();
+                if (currentTopicId === topicId) {
+                    resetConversationView();
+                }
+                updateHistoryEmptyState();
+            } catch (error) {
+                alert(`删除失败：${error.message}`);
+            }
+        }
+
+        // 话题列表点击：切换 / 重命名 / 删除
+        historyList.addEventListener('click', event => {
+            const li = event.target.closest('li');
+            if (!li || li.classList.contains('history-empty')) return;
+            const topicId = li.dataset.topicId ? parseInt(li.dataset.topicId, 10) : null;
+            const actionBtn = event.target.closest('button[data-action]');
+            if (actionBtn) {
+                event.stopPropagation();
+                if (!topicId) {
+                    // 空草稿没有后端记录，删除即移除
+                    if (actionBtn.dataset.action === 'delete') removeDraftItem();
+                    return;
+                }
+                if (actionBtn.dataset.action === 'rename') renameTopic(topicId);
+                else if (actionBtn.dataset.action === 'delete') deleteTopic(topicId);
+                return;
+            }
+            if (topicId) selectTopic(topicId);
+        });
         // 代码块与公式增强：MathJax 排版、highlight.js 高亮、折叠/复制工具栏
         function enhanceAIBubble(bubble) {
             const typeset = (attempt = 0) => {
@@ -614,6 +1003,13 @@
         function deleteMessage(msgDiv) {
             const idxStr = msgDiv.dataset.convIndex;
             const idx = idxStr !== undefined ? parseInt(idxStr, 10) : NaN;
+            // 同步删除后端消息；若消息仍在保存中，等拿到 id 后再补删
+            const msgId = msgDiv.dataset.msgId;
+            if (msgId && currentTopicId) {
+                deleteMessageOnServer(currentTopicId, msgId);
+            } else if (!msgId) {
+                msgDiv._pendingDelete = true;
+            }
             msgDiv.remove();
             if (isNaN(idx)) return;
             conversationHistory.splice(idx, 1);
@@ -657,6 +1053,15 @@
                 bubble.innerHTML = renderMarkdown(aiReply);
                 if (toolbar) bubble.appendChild(toolbar);
                 enhanceAIBubble(bubble);
+
+                // 同步更新后端消息；保存未完成时暂存内容，等 id 返回后再补发
+                if (currentTopicId) {
+                    if (msgDiv.dataset.msgId) {
+                        updateMessageOnServer(currentTopicId, msgDiv.dataset.msgId, aiReply);
+                    } else {
+                        msgDiv._pendingContent = aiReply;
+                    }
+                }
             } catch (error) {
                 const bubble = msgDiv.querySelector('.bubble');
                 bubble.textContent = `刷新失败: ${error.message}`;
@@ -666,10 +1071,13 @@
             }
         }
         // 渲染消息：创建头像、气泡与工具栏，并滚动到底部
-        function appendMessage(role, text) {
+        function appendMessage(role, text, shouldScroll = true) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${role}`;
-            const formattedText = role === 'ai' ? renderMarkdown(text) : text.replace(/\n/g, '<br>');
+            // 用户消息一律转义；AI 消息走 Markdown 渲染
+            const formattedText = role === 'ai'
+                ? renderMarkdown(text)
+                : escapeHtml(text).replace(/\n/g, '<br>');
 
             msgDiv.innerHTML = `
                 <div class="avatar">${role === 'user' ? '我' : 'AI'}</div>
@@ -723,7 +1131,9 @@
             if (role === 'ai') {
                 enhanceAIBubble(bubble);
             }
-            chatLog.scrollTop = chatLog.scrollHeight; // 滚动到底部
+            if (shouldScroll) {
+                chatLog.scrollTop = chatLog.scrollHeight; // 滚动到底部
+            }
             return msgDiv;
         }
         // 发送消息流程：读取输入→校验密钥→维护上下文→调用 DeepSeek→渲染回复
@@ -739,18 +1149,24 @@
                 return;
             }
 
+            // 记录发送时的话题视图，AI 返回后若已切换则丢弃
+            const viewAtSend = viewToken;
             const userMsgEl = appendMessage('user', text);
             userInput.value = '';
             sendBtn.disabled = true;
             typingIndicator.style.display = 'block';
 
             if (!conversationHistory.length || conversationHistory[0].role !== "system") {
-                conversationHistory.unshift({ role: "system", content: "你是轨道交通领域的专家，能够回答相关专业性问题，语言能够体现专业性和逻辑性。" });
+                conversationHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
             }
             conversationHistory.push({ role: "user", content: text });
             userMsgEl.dataset.history = '1';
             userMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
-            
+
+            // 首次发言时创建后端话题；保存失败不阻塞聊天
+            const topicId = await ensureTopic(text);
+            saveMessageToServer(topicId, 'user', text, userMsgEl);
+
 
             try {
                 // 3. 调用 DeepSeek API
@@ -774,12 +1190,16 @@
                 const data = await response.json();
                 const aiReply = data.choices[0].message.content;
 
+                // 用户已切换/新建话题，本次回复不再渲染和保存
+                if (viewAtSend !== viewToken) return;
+
                 const aiMsgEl = appendMessage('ai', aiReply);
-                
+
                 // 将 AI 回复加入历史上下文
                 conversationHistory.push({ role: "assistant", content: aiReply });
                 aiMsgEl.dataset.history = '1';
                 aiMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
+                saveMessageToServer(topicId, 'assistant', aiReply, aiMsgEl);
 
             } catch (error) {
                 console.error(error);

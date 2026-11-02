@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | 课程首页 | `index.html` | 课程简介、课程信息、学习目标、课程大纲、教师简介 |
 | 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的 GraphRAG 课程知识图谱可视化，支持节点搜索 |
-| AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，支持多话题、Markdown/代码/公式渲染 |
+| AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，话题与消息按用户持久化，支持新建/切换/重命名/删除，Markdown/代码/公式渲染 |
 | 知识测试（暂未开放） | `test.html` | 导航入口保留，点击仅提示；服务端将直接访问重定向回首页 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
 | 登录 / 注册 | `login.html` / `register.html` | 按学号/工号长度区分学生与教师 |
@@ -63,7 +63,7 @@ cp .env.example .env
 
 仓库通过 `.gitignore` 排除了以下内容，克隆后需要自行准备：
 
-1. **`user.db`**：数据库文件不在仓库中。首次运行前需创建，表结构见下方[数据库](#数据库)。若文件不存在，`sqlite3` 会创建空文件，但登录、注册、测试等接口会因缺表而报错。
+1. **`user.db`**：数据库文件不在仓库中。首次运行前需创建，表结构见下方[数据库](#数据库)。若文件不存在，`sqlite3` 会创建空文件，但登录、注册、测试等接口会因缺表而报错。AI 问答使用的 `chat_topics`、`chat_messages` 由 `server.js` 启动时自动创建，无需手工建表。
 2. **`resources/`**：课程资源（教材 PDF、PPT、视频等）体积达数十 GB，未纳入版本库。需按 `resources.html` 中的链接路径放入对应目录，资源链接才能打开。
 
 ## 目录结构
@@ -112,6 +112,14 @@ kg-rail/
 | `GET` | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽取题目（默认 10 题），响应中已剔除 `answer` |
 | `POST` | `/api/submit-test` | 提交答案，服务端评分并将作答记录写入 `answers` 表 |
 | `GET` | `/api/config` | 返回服务端 `.env` 中的 DeepSeek API Key（供 AI 问答页使用） |
+| `GET` | `/api/topics?userId=` | 获取用户话题列表，按最近活跃排序 |
+| `POST` | `/api/topics` | 新建话题（`userId`、`title`） |
+| `PUT` | `/api/topics/:id` | 重命名话题 |
+| `DELETE` | `/api/topics/:id?userId=` | 删除话题及其全部消息 |
+| `GET` | `/api/topics/:id/messages?userId=` | 获取话题下的全部消息 |
+| `POST` | `/api/topics/:id/messages` | 追加一条消息（`role` 为 `user`/`assistant`） |
+| `PUT` | `/api/topics/:id/messages/:messageId` | 覆盖某条消息内容（AI 重新生成） |
+| `DELETE` | `/api/topics/:id/messages/:messageId?userId=` | 删除单条消息 |
 
 登录响应中的 `role` 为中文：`教师`、`本科生`、`研究生`。前端将 `userInfo`（`id`、`name`、`role`）存入 `localStorage`，服务端不维护会话或 Cookie。
 
@@ -125,6 +133,8 @@ kg-rail/
 | `teacher` | `id`（主键）、`name`、`phone`、`email`、`password` | 工号为 4 位数字 |
 | `questions` | `id`、`question`、`options`、`answer`、`type`、`lesson`、`difficulty`、`chapter`、`knowledge_point` | 题型：单选题、填空题、简答题、计算题 |
 | `answers` | `id`、`test_id`、`datetime`、`user_id`、`question_id`、`input_answer`、`accuracy` | 每次提交按题目逐条记录 |
+| `chat_topics` | `id`、`user_id`、`title`、`created_at`、`updated_at` | AI 问答话题；时间存毫秒时间戳 |
+| `chat_messages` | `id`、`topic_id`、`role`、`content`、`created_at` | AI 问答消息，`role` 为 `user`/`assistant` |
 | `degree` | `x`、`y` | 历史遗留的图谱坐标表，当前代码未使用 |
 
 评分规则（`POST /api/submit-test`）：
@@ -153,7 +163,9 @@ kg-rail/
 
 `aiqa.html` 直接调用 DeepSeek 官方 `chat/completions` 接口（`https://api.deepseek.com/chat/completions`），模型为 `deepseek-flash`（DeepSeek-V4.1-Flash）。
 
-密钥保存在服务端 `.env` 的 `DEEPSEEK_API_KEY` 中，页面加载时通过 `GET /api/config` 自动填入左侧输入框，也可手动填写。前端源码中不再包含密钥。注意该接口对所有访问者开放，密钥仍可在浏览器网络请求中看到，仅适用于教学场景；生产环境应改为服务端代理调用，浏览器不接触密钥。对话历史仅存在于当前页面会话中，刷新后不保留。
+密钥保存在服务端 `.env` 的 `DEEPSEEK_API_KEY` 中，页面加载时通过 `GET /api/config` 自动填入左侧输入框，也可手动填写。前端源码中不再包含密钥。注意该接口对所有访问者开放，密钥仍可在浏览器网络请求中看到，仅适用于教学场景；生产环境应改为服务端代理调用，浏览器不接触密钥。
+
+话题与消息按 `userId` 保存在 `user.db` 的 `chat_topics` / `chat_messages` 表中：新建话题先显示为草稿，发出第一条消息时才写入数据库，空草稿离开后自动丢弃；刷新页面或换设备登录同一账号后可恢复完整对话。保存失败不会中断聊天，但该轮内容可能丢失。
 
 系统提示词：`你是轨道交通领域的专家，能够回答相关专业性问题，语言能够体现专业性和逻辑性。`
 
@@ -184,7 +196,7 @@ kg-rail/
 2. **密码明文存储与传输**：应使用 bcrypt 等算法加盐哈希，并强制 HTTPS。
 3. **API Key 对外下发**：密钥已从源码移入 `.env`，但 `GET /api/config` 对所有访问者返回明文 Key。生产环境应改为服务端代理调用，浏览器不接触密钥。
 4. **CORS 完全开放**：`origin: "*"`，任意站点均可调用接口。
-5. **无会话与鉴权**：接口仅凭前端传入的 `userId` 操作数据，可越权查看/修改他人信息。
+5. **无会话与鉴权**：接口仅凭前端传入的 `userId` 操作数据，可越权查看/修改他人信息；AI 问答话题接口同样只信任 `userId`，知道他人学号/工号即可读取或删除其话题。
 6. **无速率限制**：登录与注册接口可被暴力尝试。
 
 ## 许可
