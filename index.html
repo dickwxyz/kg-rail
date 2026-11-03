@@ -354,6 +354,7 @@
       </section>
 
       <!-- 页面脚本：登录状态检查与退出 -->
+      <script src="./js/tracker.js"></script>
       <script>
         // 检查登录状态
         async function checkLogin() {
@@ -401,7 +402,10 @@
         }
 
         // 页面加载时检查登录状态
-        window.onload = checkLogin;
+        window.onload = function () {
+          checkLogin();
+          if (window.KGTracker) KGTracker.init({ page: "index" });
+        };
       </script>
     </div>
   

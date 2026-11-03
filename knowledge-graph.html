@@ -267,7 +267,7 @@
     <!-- 搜索区域 -->
     <div class="search-container">
       <input type="text" id="search-node" placeholder="搜索知识节点..." />
-      <button id="search-button">搜索</button>
+      <button id="search-button" data-track="graph_search">搜索</button>
 
       <!-- 状态信息 -->
       <div id="status-message" class="status-message"></div>
@@ -285,6 +285,7 @@
     <div id="knowledge-graph-container"></div>
 
     <!-- 页面脚本 -->
+    <script src="./js/tracker.js"></script>
     <script>
       // 检查登录状态
       async function checkLogin() {
@@ -680,6 +681,20 @@
         // 创建网络
         graphNetwork = new vis.Network(container, { nodes, edges }, options);
 
+        // 记录节点查看行为（只记录点击，避免与失焦重复计数）
+        graphNetwork.on("click", function (params) {
+          if (!params.nodes || !params.nodes.length || !window.KGTracker) return;
+          const nodeId = params.nodes[0];
+          const node = graphData.nodes.find((item) => item.id === nodeId) || {};
+          const props = node.properties || {};
+          KGTracker.track("graph_node_open", {
+            nodeId: String(nodeId),
+            label: String(node.label || props.label || "").slice(0, 80),
+            sourceFile: String(props.source_file || "").slice(0, 120),
+            community: props.community,
+          });
+        });
+
         // 稳定化完成后关闭物理引擎（graph.html 原生行为）
         graphNetwork.once("stabilizationIterationsDone", () => {
           graphNetwork.setOptions({ physics: { enabled: false } });
@@ -710,6 +725,14 @@
           ].filter(Boolean).join(" ").toLowerCase();
           return haystack.includes(searchText.toLowerCase());
         });
+
+        if (window.KGTracker) {
+          KGTracker.track("graph_search", {
+            queryText: String(searchText).slice(0, 50),
+            resultCount: filteredNodes.length,
+            topNodeIds: filteredNodes.slice(0, 5).map((node) => node.id),
+          });
+        }
 
         if (filteredNodes.length > 0) {
           // 更新界面显示高亮搜索结果
@@ -753,6 +776,7 @@
       window.onload = function() {
         // 检查登录状态
         checkLogin();
+        if (window.KGTracker) KGTracker.init({ page: "knowledge_graph" });
 
         // 显示图谱正在加载的状态
         showStatus("正在加载知识图谱数据...", "warning");
