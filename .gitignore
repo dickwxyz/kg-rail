@@ -2,6 +2,7 @@
 *.db
 *.sqlite
 *.sqlite3
+user.db.bak-*
 
 # Node.js
 node_modules/

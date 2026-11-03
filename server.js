@@ -7,6 +7,7 @@ const cors = require("cors"); // 引入 CORS
 const fs = require("fs");
 const path = require("path");
 const { spawn, execFile } = require("child_process");
+const { createTeachingModule } = require("./lib/teaching");
 
 // 读取项目根目录的 .env（零依赖实现，不覆盖已存在的环境变量）
 function loadEnvFile(filePath) {
@@ -42,8 +43,8 @@ process.on('uncaughtException', (error) => {
   console.error('未捕获的异常:', error);
 });
 
-// 数据库初始化：连接本地 SQLite 文件（user.db）
-const db = new sqlite3.Database("./user.db", (err) => {
+// 数据库初始化：连接本地 SQLite 文件（默认 user.db，可用 DB_PATH 覆盖）
+const db = new sqlite3.Database(process.env.DB_PATH || "./user.db", (err) => {
   if (err) console.error("数据库连接失败:", err.message);
   else console.log("已连接到 SQLite 数据库");
 });
@@ -91,6 +92,15 @@ try {
   console.warn("读取知识图谱数据失败，图谱问答证据将为空:", err.message);
 }
 
+// 教学分析模块：建表、行为事件、章节归因、班级统计与教学建议
+// 放在这里只做实例化；路由在 body-parser 之后统一注册
+const teaching = createTeachingModule({
+  db,
+  graphNodes: GRAPH_NODES,
+  graphLinks: GRAPH_LINKS,
+  env: process.env,
+});
+
 // graphify 关系类型 → 中文（未知类型回退英文）
 const RELATION_ZH = {
   contains: "包含",
@@ -132,7 +142,9 @@ function isBlockedStaticPath(pathname) {
     /(^|\/)\.vscode(\/|$)/i.test(decoded) ||
     /^\/server\.js$/i.test(decoded) ||
     /^\/package(-lock)?\.json$/i.test(decoded) ||
-    /^\/node_modules(\/|$)/i.test(decoded)
+    /^\/node_modules(\/|$)/i.test(decoded) ||
+    /^\/lib(\/|$)/i.test(decoded) ||
+    /^\/scripts(\/|$)/i.test(decoded)
   );
 }
 
@@ -1501,7 +1513,14 @@ app.get('/api/questions', (req, res) => {
 
 // 提交测试答案接口
 app.post('/api/submit-test', (req, res) => {
-  const { userId, userType, answers } = req.body;
+  const {
+    userId,
+    userType,
+    answers,
+    testId: requestedTestId,
+    startedAt,
+    durationMs,
+  } = req.body;
 
   if (!userId || !answers) {
     return res.status(400).json({ success: false, message: '参数不完整！' });
@@ -1516,7 +1535,7 @@ app.post('/api/submit-test', (req, res) => {
 
   // 查询这些题目的正确答案
   const placeholders = questionIds.map(() => '?').join(',');
-  const sql = `SELECT id, answer, type, difficulty FROM questions WHERE id IN (${placeholders})`;
+  const sql = `SELECT id, answer, type, difficulty, lesson FROM questions WHERE id IN (${placeholders})`;
 
   db.all(sql, questionIds, (err, rows) => {
     if (err) {
@@ -1533,13 +1552,13 @@ app.post('/api/submit-test', (req, res) => {
     let totalScore = 0;
     let wrongCount = 0;
 
-    // 生成一个唯一的test_id (时间戳+随机数)
-    const testId = Date.now() + Math.floor(Math.random() * 1000);
-    const currentDateTime = new Date().toISOString();
-
-    // 准备批量插入答案的语句
-    const insertAnswersSql = `INSERT INTO answers (test_id, datetime, user_id, question_id, input_answer, accuracy) VALUES (?, ?, ?, ?, ?, ?)`;
-    const answerValues = [];
+    // 客户端可传稳定 testId，用于重复提交幂等；非法时服务端生成
+    const testId = /^[A-Za-z0-9_-]{8,64}$/.test(String(requestedTestId || ''))
+      ? String(requestedTestId)
+      : `t_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+    const submittedAt = Date.now();
+    const currentDateTime = new Date(submittedAt).toISOString();
+    const graded = [];
 
     rows.forEach(question => {
       const userAnswer = answers[question.id];
@@ -1614,15 +1633,14 @@ app.post('/api/submit-test', (req, res) => {
         }
       }
 
-      // 将答案记录添加到批量插入数组中
-      answerValues.push([
-        testId,
-        currentDateTime,
-        userId,
-        question.id,
-        userAnswer || '',
-        accuracy
-      ]);
+      graded.push({
+        questionId: question.id,
+        inputAnswer: userAnswer || '',
+        accuracy,
+        correct: isCorrect,
+        earned: isCorrect ? questionScore : 0,
+        answered: !!(userAnswer && String(userAnswer).trim()),
+      });
 
       if (isCorrect) {
         correctCount++;
@@ -1648,40 +1666,58 @@ app.post('/api/submit-test', (req, res) => {
       timestamp: currentDateTime
     };
 
-    // 将所有答案批量插入数据库
-    const insertPromises = answerValues.map(values => {
-      return new Promise((resolve, reject) => {
-        db.run(insertAnswersSql, values, function(err) {
-          if (err) {
-            console.error('插入答案失败:', err.message, values);
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
-    });
+    const lesson = (rows[0] && rows[0].lesson) || '';
+    const resolvedDuration = Number.isFinite(Number(durationMs))
+      ? Number(durationMs)
+      : Number.isFinite(Number(startedAt)) && Number(startedAt) > 0
+      ? submittedAt - Number(startedAt)
+      : null;
 
-    Promise.all(insertPromises)
-      .then(() => {
-        // 所有答案保存成功
+    // 事务写 answers + test_attempts；失败时返回评分结果但不假装保存成功
+    teaching
+      .persistTestAttempt({
+        testId,
+        userId,
+        lesson,
+        startedAt: Number.isFinite(Number(startedAt)) ? Number(startedAt) : null,
+        submittedAt,
+        durationMs: resolvedDuration,
+        questions: rows,
+        graded,
+        result: testResult,
+      })
+      .then((persist) => {
+        if (persist.duplicate) {
+          return res.status(200).json({
+            success: true,
+            message: '该测试已提交，返回已有结果',
+            duplicate: true,
+            ...testResult,
+          });
+        }
+        const attempt = persist.attempt || {};
         return res.status(200).json({
           success: true,
           message: '评分完成！',
-          ...testResult
+          ...testResult,
+          fullScore: attempt.fullScore,
+          scoreRate: attempt.scoreRate,
+          durationMs: attempt.durationMs,
         });
       })
-      .catch(err => {
-        // 有答案保存失败
-        console.error('保存答案失败:', err.message);
+      .catch((persistErr) => {
+        console.error('保存测试记录失败:', persistErr.message);
         return res.status(500).json({
           success: false,
-          message: '部分答案保存失败，请稍后重试！',
+          message: '评分完成，但保存失败，请稍后重试！',
           ...testResult
         });
       });
   });
 });
+
+// 教学分析路由：事件采集与教学建议（必须在 body-parser 之后注册）
+teaching.registerRoutes(app);
 
 // 启动服务：监听本地端口
 app.use((err, req, res, next) => {

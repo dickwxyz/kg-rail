@@ -283,6 +283,794 @@
         color: #2980b9;
         text-decoration: underline;
       }
+
+      /* ==================== 教学建议 ==================== */
+      :root {
+        --kg-primary: #1f3a5f;
+        --kg-primary-2: #2c5f8a;
+        --kg-accent: #f1c40f;
+        --kg-success: #16a34a;
+        --kg-warning: #f59e0b;
+        --kg-danger: #dc2626;
+        --kg-text: #1f2937;
+        --kg-muted: #64748b;
+        --kg-border: #e2e8f0;
+        --kg-bg: #f4f7fb;
+        --kg-card: #ffffff;
+        --kg-radius: 14px;
+        --kg-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .06);
+      }
+
+      #teaching-section {
+        padding-bottom: 20px;
+      }
+      #teaching-section h1 {
+        margin-bottom: 18px;
+      }
+      .kg-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        background: rgba(255, 255, 255, .94);
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--kg-border);
+        border-radius: var(--kg-radius);
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .05);
+      }
+      .kg-toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .kg-inline-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .86rem;
+        color: var(--kg-muted);
+      }
+      .kg-inline-field select {
+        padding: 6px 8px;
+        border: 1px solid var(--kg-border);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--kg-text);
+        font-size: .86rem;
+      }
+      .kg-demo-banner {
+        margin-bottom: 14px;
+        padding: 10px 14px;
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+        color: #92400e;
+        border-radius: 10px;
+        font-size: .86rem;
+      }
+      .kg-muted {
+        color: var(--kg-muted);
+        font-size: .82rem;
+      }
+      .kg-tiny {
+        font-size: .72rem;
+      }
+      .kg-num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .kg-card {
+        background: var(--kg-card);
+        border: 1px solid var(--kg-border);
+        border-radius: var(--kg-radius);
+        box-shadow: var(--kg-shadow);
+        padding: 20px 22px;
+        margin-bottom: 18px;
+      }
+      .kg-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .kg-card-head h2 {
+        margin: 0;
+        font-size: 1.02rem;
+        color: var(--kg-primary);
+        border: 0;
+        padding: 0;
+      }
+      .kg-subtitle {
+        margin: 18px 0 10px;
+        font-size: .9rem;
+        color: var(--kg-primary);
+      }
+      .kg-progress-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 18px;
+        margin-bottom: 14px;
+      }
+      .kg-progress-grid .form-group {
+        margin: 0;
+      }
+      .kg-progress-grid textarea {
+        min-height: 64px;
+        resize: vertical;
+      }
+      .kg-span-2 {
+        grid-column: span 2;
+      }
+      .kg-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .kg-kpi {
+        background: var(--kg-card);
+        border: 1px solid var(--kg-border);
+        border-radius: var(--kg-radius);
+        box-shadow: var(--kg-shadow);
+        padding: 16px 16px 12px;
+        transition: transform .2s ease, box-shadow .2s ease;
+      }
+      .kg-kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, .10);
+      }
+      .kg-kpi-label {
+        color: var(--kg-muted);
+        font-size: .78rem;
+        margin-bottom: 6px;
+      }
+      .kg-kpi-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--kg-text);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.2;
+      }
+      .kg-kpi-foot {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 8px;
+        color: var(--kg-muted);
+        font-size: .74rem;
+      }
+      .kg-spark {
+        width: 88px;
+        height: 26px;
+        flex-shrink: 0;
+      }
+      .kg-dashboard {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+      .kg-dashboard .kg-card {
+        margin-bottom: 0;
+      }
+      .kg-dashboard .kg-span-2 {
+        grid-column: span 2;
+      }
+      .kg-heat-grid {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 16px;
+      }
+      .kg-heat-cell {
+        min-height: 48px;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-variant-numeric: tabular-nums;
+        border: 1px solid transparent;
+      }
+      .kg-heat-no {
+        font-size: .68rem;
+        opacity: .8;
+      }
+      .kg-heat-val {
+        font-size: .78rem;
+        font-weight: 600;
+      }
+      .kg-cell-good { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+      .kg-cell-mid { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+      .kg-cell-low { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+      .kg-cell-untested { background: #f8fafc; color: #94a3b8; border: 1px dashed #cbd5e1; }
+      .kg-cell-untaught { background: repeating-linear-gradient(135deg, #f8fafc, #f8fafc 6px, #eef2f7 6px, #eef2f7 12px); color: #94a3b8; border-color: #e2e8f0; }
+      .kg-bar-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .kg-bar-row {
+        display: grid;
+        grid-template-columns: minmax(150px, 250px) minmax(80px, 1fr) 52px auto;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background .15s ease;
+      }
+      .kg-bar-row:hover {
+        background: #f8fafc;
+      }
+      .kg-bar-label {
+        font-size: .8rem;
+        color: var(--kg-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .kg-bar-track {
+        height: 9px;
+        background: #eef2f7;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .kg-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2c5f8a, #3498db);
+        transition: width .5s ease;
+      }
+      .kg-bar-track.kg-bar-untested {
+        border: 1px dashed #cbd5e1;
+        background: repeating-linear-gradient(135deg, #f8fafc, #f8fafc 6px, #eef2f7 6px, #eef2f7 12px);
+      }
+      .kg-bar-track.kg-bar-untaught {
+        opacity: .45;
+      }
+      .kg-bar-value {
+        font-size: .78rem;
+        text-align: right;
+        color: var(--kg-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .kg-bar-row-compact {
+        grid-template-columns: minmax(120px, 200px) 1fr 52px;
+        cursor: default;
+        padding: 4px 0;
+      }
+      .kg-chapter-detail {
+        padding: 8px 10px 10px 10px;
+        margin: 0 0 4px;
+        background: #f8fafc;
+        border-radius: 8px;
+      }
+      .kg-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px 12px;
+        font-size: .76rem;
+        color: var(--kg-muted);
+      }
+      .kg-detail-grid b {
+        color: var(--kg-text);
+      }
+      .kg-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .kg-badge-high { background: #fee2e2; color: #991b1b; }
+      .kg-badge-medium { background: #fef3c7; color: #92400e; }
+      .kg-badge-low { background: #dcfce7; color: #166534; }
+      .kg-badge-none { background: #f1f5f9; color: #64748b; }
+      .kg-trend {
+        min-height: 220px;
+      }
+      .kg-chart-wrap {
+        width: 100%;
+      }
+      .kg-chart {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .kg-legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 8px;
+        color: var(--kg-muted);
+        font-size: .76rem;
+      }
+      .kg-legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 5px;
+        vertical-align: -1px;
+      }
+      .kg-donut-wrap {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .kg-donut-svg {
+        width: 170px;
+        height: 170px;
+        flex-shrink: 0;
+      }
+      .kg-donut-legend {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: .8rem;
+      }
+      .kg-donut-legend li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .kg-donut-legend i {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      .kg-donut-legend b {
+        margin-left: auto;
+        color: var(--kg-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .kg-mini-kpis {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .kg-mini-kpi {
+        background: #f8fafc;
+        border: 1px solid var(--kg-border);
+        border-radius: 10px;
+        padding: 8px 12px;
+        min-width: 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .kg-mini-kpi span {
+        font-size: .72rem;
+        color: var(--kg-muted);
+      }
+      .kg-mini-kpi b {
+        font-size: .96rem;
+        color: var(--kg-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .kg-two-col {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+      }
+      .kg-theme-item,
+      .kg-unresolved {
+        padding: 10px 0;
+        border-bottom: 1px dashed var(--kg-border);
+      }
+      .kg-theme-item:last-child,
+      .kg-unresolved:last-child {
+        border-bottom: 0;
+      }
+      .kg-theme-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .kg-theme-quote {
+        margin: 6px 0 0;
+        color: var(--kg-muted);
+        font-size: .8rem;
+      }
+      .kg-unresolved p {
+        margin: 4px 0 0;
+        color: var(--kg-muted);
+        font-size: .78rem;
+        line-height: 1.5;
+      }
+      .kg-resource-grid {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 22px;
+        align-items: start;
+      }
+      .kg-resource-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px dashed var(--kg-border);
+        font-size: .82rem;
+      }
+      .kg-resource-item:last-child {
+        border-bottom: 0;
+      }
+      .kg-resource-item .kg-muted {
+        margin-left: 8px;
+      }
+      .kg-resource-nums {
+        display: flex;
+        gap: 10px;
+        color: var(--kg-muted);
+        font-size: .76rem;
+        white-space: nowrap;
+      }
+      .kg-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--kg-border);
+        border-radius: 10px;
+      }
+      .kg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .8rem;
+        background: #fff;
+      }
+      .kg-table th,
+      .kg-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #eef2f7;
+        text-align: left;
+        vertical-align: middle;
+      }
+      .kg-table th {
+        position: sticky;
+        top: 0;
+        background: #f8fafc;
+        color: var(--kg-muted);
+        font-weight: 600;
+        font-size: .74rem;
+        white-space: nowrap;
+      }
+      .kg-table tbody tr:hover {
+        background: #f8fbff;
+      }
+      .kg-student-row {
+        cursor: pointer;
+      }
+      .kg-table-students th,
+      .kg-table-students td {
+        white-space: nowrap;
+      }
+      .kg-question-text {
+        max-width: 420px;
+        line-height: 1.45;
+      }
+      .kg-risk {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .kg-risk-high { background: #fee2e2; color: #991b1b; }
+      .kg-risk-medium { background: #fef3c7; color: #92400e; }
+      .kg-risk-low { background: #e0f2fe; color: #075985; }
+      .kg-risk-none { background: #f1f5f9; color: #64748b; }
+      .kg-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #475569;
+        font-size: .7rem;
+        margin: 2px 4px 2px 0;
+      }
+      .kg-chip-high { background: #fee2e2; color: #991b1b; }
+      .kg-chip-medium { background: #fef3c7; color: #92400e; }
+      .kg-chip-low { background: #e0f2fe; color: #075985; }
+      .kg-flags {
+        margin: 8px 0 4px;
+      }
+      .kg-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .kg-select {
+        padding: 5px 8px;
+        border: 1px solid var(--kg-border);
+        border-radius: 8px;
+        background: #fff;
+        font-size: .8rem;
+        color: var(--kg-text);
+      }
+      .kg-details summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        cursor: pointer;
+        list-style: none;
+      }
+      .kg-details summary::-webkit-details-marker {
+        display: none;
+      }
+      .kg-details summary h2 {
+        margin: 0;
+        border: 0;
+        padding: 0;
+      }
+      .kg-generate-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 6px 0 16px;
+      }
+      .kg-report {
+        padding: 22px 24px;
+      }
+      .kg-report-meta {
+        color: var(--kg-muted);
+        font-size: .76rem;
+      }
+      .kg-report-summary {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        background: #f8fafc;
+        border-radius: 10px;
+        margin-bottom: 6px;
+      }
+      .kg-report-summary p {
+        margin: 0;
+        line-height: 1.7;
+        font-size: .86rem;
+      }
+      .kg-level {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 58px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .kg-level-good { background: #dcfce7; color: #166534; }
+      .kg-level-mid { background: #fef3c7; color: #92400e; }
+      .kg-level-risk { background: #fee2e2; color: #991b1b; }
+      .kg-report-item {
+        padding: 12px 0;
+        border-bottom: 1px dashed var(--kg-border);
+      }
+      .kg-report-item:last-child {
+        border-bottom: 0;
+      }
+      .kg-report-item-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+      }
+      .kg-report-item p {
+        margin: 4px 0;
+        font-size: .82rem;
+        line-height: 1.65;
+      }
+      .kg-plain-list {
+        margin: 6px 0 0;
+        padding-left: 20px;
+        font-size: .82rem;
+        line-height: 1.7;
+      }
+      .kg-findings li {
+        margin-bottom: 4px;
+      }
+      .kg-evidence-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 6px;
+        background: #eef2ff;
+        color: #4338ca;
+        font-size: .66rem;
+        vertical-align: 1px;
+      }
+      .kg-gap {
+        margin: 10px 0 4px;
+        padding: 12px 14px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        font-size: .8rem;
+        color: #92400e;
+      }
+      .kg-timeline-item {
+        display: flex;
+        gap: 12px;
+        padding: 8px 0;
+        border-left: 2px solid #dbeafe;
+        margin-left: 6px;
+        padding-left: 14px;
+      }
+      .kg-timeline-min {
+        flex-shrink: 0;
+        font-weight: 600;
+        color: var(--kg-primary-2);
+        font-size: .8rem;
+        min-width: 34px;
+      }
+      .kg-timeline-item p {
+        margin: 2px 0 0;
+        font-size: .8rem;
+        color: var(--kg-muted);
+      }
+      .kg-evidence {
+        margin-top: 16px;
+        border-top: 1px dashed var(--kg-border);
+        padding-top: 12px;
+      }
+      .kg-evidence summary {
+        cursor: pointer;
+        color: var(--kg-muted);
+        font-size: .78rem;
+      }
+      .kg-disclaimer {
+        margin-top: 14px;
+        color: #94a3b8;
+        font-size: .72rem;
+      }
+      .kg-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .kg-empty {
+        padding: 22px 16px;
+        text-align: center;
+        color: var(--kg-muted);
+        font-size: .84rem;
+        background: #f8fafc;
+        border: 1px dashed var(--kg-border);
+        border-radius: 10px;
+      }
+      .kg-skeleton {
+        background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+        background-size: 400% 100%;
+        animation: kg-shimmer 1.4s ease infinite;
+        border-radius: 10px;
+      }
+      .kg-skeleton-block {
+        height: 220px;
+      }
+      @keyframes kg-shimmer {
+        0% { background-position: 100% 50%; }
+        100% { background-position: 0 50%; }
+      }
+      .kg-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .kg-modal[hidden] {
+        display: none;
+      }
+      .kg-modal-panel {
+        position: relative;
+        width: min(900px, 100%);
+        max-height: 86vh;
+        overflow-y: auto;
+        background: #fff;
+        border-radius: 18px;
+        padding: 26px 28px;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .28);
+      }
+      .kg-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        border: 0;
+        background: #f1f5f9;
+        color: #475569;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+      .kg-modal-close:hover {
+        background: #e2e8f0;
+      }
+      .kg-modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .kg-modal-head h2 {
+        margin: 0 0 4px;
+        border: 0;
+        padding: 0;
+        font-size: 1.15rem;
+      }
+      body.kg-modal-open {
+        overflow: hidden;
+      }
+      .kg-loading .kg-kpi-grid,
+      .kg-loading .kg-dashboard {
+        opacity: .55;
+        pointer-events: none;
+        transition: opacity .2s ease;
+      }
+
+      @media (max-width: 1100px) {
+        .kg-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .kg-dashboard { grid-template-columns: 1fr; }
+        .kg-dashboard .kg-span-2 { grid-column: span 1; }
+        .kg-resource-grid { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 760px) {
+        .kg-progress-grid { grid-template-columns: 1fr; }
+        .kg-span-2 { grid-column: span 1; }
+        .kg-two-col { grid-template-columns: 1fr; }
+        .kg-heat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .kg-bar-row { grid-template-columns: minmax(110px, 1.4fr) minmax(60px, 1fr) 46px; }
+        .kg-bar-row .kg-badge { display: none; }
+        .kg-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .kg-modal { padding: 0; }
+        .kg-modal-panel { max-height: 100vh; border-radius: 0; padding: 20px 16px; }
+      }
+      @media (max-width: 520px) {
+        .kg-kpi-grid { grid-template-columns: 1fr; }
+        .kg-toolbar { position: static; }
+        .kg-donut-wrap { flex-direction: column; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .kg-bar-fill { transition: none; }
+        .kg-skeleton { animation: none; }
+        .kg-kpi { transition: none; }
+      }
 </style>
   </head>
   <body>
@@ -419,12 +1207,149 @@
         <!-- 教学建议区域（教师） -->
         <div class="content-section" id="teaching-section">
           <h1>教学建议</h1>
-          <p>该功能正在开发中，敬请期待...</p>
+
+          <div id="teaching-demo-banner" class="kg-demo-banner" style="display: none;">
+            当前展示的是演示数据，用于预览不同班级场景下的教学建议效果。
+          </div>
+
+          <div class="kg-toolbar">
+            <div class="kg-toolbar-left">
+              <label class="kg-inline-field">课程
+                <select id="teaching-course" onchange="TeachingCenter.switchCourse(this.value)"></select>
+              </label>
+              <label class="kg-inline-field">时间范围
+                <select id="teaching-range" onchange="TeachingCenter.switchRange(this.value)">
+                  <option value="7d">近 7 天</option>
+                  <option value="30d" selected>近 30 天</option>
+                  <option value="90d">近 90 天</option>
+                  <option value="all">全部</option>
+                </select>
+              </label>
+              <button class="btn btn-small" data-track="teaching_refresh" onclick="TeachingCenter.refresh()">刷新</button>
+            </div>
+            <span id="teaching-updated-at" class="kg-muted"></span>
+          </div>
+
+          <div id="teaching-message" class="message"></div>
+          <div id="teaching-empty" class="kg-empty" style="display: none;"></div>
+
+          <div class="kg-card kg-progress-card">
+            <div class="kg-card-head">
+              <h2>当前教学进度</h2>
+              <span id="teaching-progress-hint" class="kg-muted"></span>
+            </div>
+            <div class="kg-progress-grid">
+              <div class="form-group">
+                <label for="teaching-current-chapter">上到第几章</label>
+                <select id="teaching-current-chapter"></select>
+              </div>
+              <div class="form-group kg-span-2">
+                <label for="teaching-note">教学备注</label>
+                <textarea id="teaching-note" maxlength="500" placeholder="例如：第6章折返能力讲得较快，部分学生反应慢"></textarea>
+              </div>
+              <div class="form-group kg-span-2">
+                <label for="teaching-next-plan">下节课计划</label>
+                <textarea id="teaching-next-plan" maxlength="500" placeholder="例如：下节课讲第7章，先用 15 分钟复习第6章"></textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" data-track="teaching_save_progress" onclick="TeachingCenter.saveProgress()">保存进度</button>
+          </div>
+
+          <div class="kg-kpi-grid" id="teaching-kpis"></div>
+
+          <div class="kg-dashboard">
+            <div class="kg-card kg-span-2">
+              <div class="kg-card-head">
+                <h2>章节掌握度</h2>
+                <span class="kg-muted">点击章节展开指标</span>
+              </div>
+              <div id="teaching-heatmap" class="kg-heat-grid"></div>
+              <div id="teaching-chapters" class="kg-bar-list"></div>
+            </div>
+            <div class="kg-card">
+              <div class="kg-card-head"><h2>学习活跃趋势</h2></div>
+              <div id="teaching-trend" class="kg-trend"></div>
+            </div>
+            <div class="kg-card">
+              <div class="kg-card-head"><h2>追问类型</h2></div>
+              <div id="teaching-followup-donut"></div>
+            </div>
+            <div class="kg-card">
+              <div class="kg-card-head"><h2>资源类型</h2></div>
+              <div id="teaching-resource-donut"></div>
+            </div>
+          </div>
+
+          <div class="kg-card">
+            <div class="kg-card-head">
+              <h2>AI 提问与追问</h2>
+              <span id="teaching-dialogue-meta" class="kg-muted"></span>
+            </div>
+            <div id="teaching-dialogue-kpis" class="kg-mini-kpis"></div>
+            <div class="kg-two-col">
+              <div>
+                <h3 class="kg-subtitle">高频困惑主题</h3>
+                <div id="teaching-themes"></div>
+              </div>
+              <div>
+                <h3 class="kg-subtitle">未解决话题</h3>
+                <div id="teaching-unresolved"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kg-card">
+            <div class="kg-card-head">
+              <h2>资源使用</h2>
+              <span class="kg-muted">谁看了什么、下载了什么</span>
+            </div>
+            <div id="teaching-resources"></div>
+          </div>
+
+          <div class="kg-card">
+            <div class="kg-card-head">
+              <h2>学生明细</h2>
+              <select id="teaching-student-sort" class="kg-select" onchange="TeachingCenter.sortStudents(this.value)">
+                <option value="risk">风险优先</option>
+                <option value="score">得分率从低到高</option>
+                <option value="active">活跃度从高到低</option>
+                <option value="name">按姓名</option>
+              </select>
+            </div>
+            <div id="teaching-students"></div>
+          </div>
+
+          <details class="kg-card kg-details">
+            <summary>
+              <h2>题目章节归因</h2>
+              <span id="teaching-attribution-summary" class="kg-muted"></span>
+            </summary>
+            <div class="kg-actions">
+              <button class="btn btn-small" id="teaching-classify-btn" data-track="teaching_classify" onclick="TeachingCenter.classifyQuestions()">AI 自动标注</button>
+              <span class="kg-muted">章节分析依赖此表，AI 预填后可逐题修正。</span>
+            </div>
+            <div id="teaching-questions"></div>
+          </details>
+
+          <div class="kg-generate-bar">
+            <button class="btn btn-primary" id="teaching-generate-btn" data-track="teaching_generate_report" onclick="TeachingCenter.generateReport()">生成教学建议</button>
+            <span class="kg-muted">建议基于统计事实生成，数字以统计卡片为准。</span>
+          </div>
+          <div id="teaching-report"></div>
+
+          <div id="student-detail-modal" class="kg-modal" hidden>
+            <div class="kg-modal-panel">
+              <button class="kg-modal-close" data-track="teaching_close_detail" onclick="TeachingCenter.closeStudentDetail()">×</button>
+              <div id="student-detail-content"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 页面脚本 -->
+    <script src="./js/tracker.js"></script>
+    <script src="./js/teaching-center.js"></script>
     <script>
       let currentUser = null;
 
@@ -432,8 +1357,18 @@
       window.onload = async function () {
         await checkLogin();
         if (currentUser) {
+          if (window.KGTracker) KGTracker.init({ page: "user_center" });
           initializeSidebar();
           await loadUserProfile();
+
+          // 支持 #teaching-section 这类深链，便于从其他页面直接进入指定标签
+          const hashSection = location.hash.replace("#", "");
+          if (hashSection && document.getElementById(hashSection)) {
+            const hashItem = document.querySelector(
+              `.sidebar-item[data-section="${hashSection}"]`
+            );
+            if (hashItem) switchSection(hashSection, hashItem);
+          }
         }
       };
 
@@ -509,17 +1444,21 @@
           item.classList.add("active");
         }
         item.textContent = text;
-        item.onclick = () => switchSection(sectionId);
+        item.dataset.section = sectionId;
+        item.setAttribute("data-track", "section_switch");
+        item.onclick = () => switchSection(sectionId, item);
         return item;
       }
 
       // 切换内容区域
-      function switchSection(sectionId) {
+      function switchSection(sectionId, item) {
         // 更新侧边栏状态
-        document.querySelectorAll(".sidebar-item").forEach((item) => {
-          item.classList.remove("active");
+        document.querySelectorAll(".sidebar-item").forEach((el) => {
+          el.classList.remove("active");
         });
-        event.target.classList.add("active");
+        const targetItem =
+          item || document.querySelector(`.sidebar-item[data-section="${sectionId}"]`);
+        if (targetItem) targetItem.classList.add("active");
 
         // 更新内容区域
         document.querySelectorAll(".content-section").forEach((section) => {
@@ -531,6 +1470,10 @@
         if (sectionId === "students-section") {
           loadFilterOptions();
           loadStudents();
+        }
+        // 教学建议页按需加载，首次进入时拉取课程与分析数据
+        if (sectionId === "teaching-section" && window.TeachingCenter) {
+          TeachingCenter.load();
         }
       }
 

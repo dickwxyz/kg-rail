@@ -445,8 +445,8 @@
             <p>本测试包含单选题、填空题和简答题三种类型，答题完成后点击提交按钮进行评分。</p>
           </div>
           <div class="test-controls">
-            <button id="start-test" class="btn btn-primary">开始测试</button>
-            <button id="submit-test" class="btn btn-success" disabled>提交答案</button>
+            <button id="start-test" data-track="test_start" class="btn btn-primary">开始测试</button>
+            <button id="submit-test" data-track="test_submit" class="btn btn-success" disabled>提交答案</button>
           </div>
         </div>
 
@@ -486,6 +486,7 @@
     </div>
 
     <!-- 页面脚本 -->
+    <script src="./js/tracker.js"></script>
     <script>
       // 检查登录状态
       async function checkLogin() {
@@ -542,8 +543,15 @@
         userAnswers: {},
         isTestStarted: false,
         isTestSubmitted: false,
-        startTime: null
+        startTime: null,
+        testId: null,
+        testStartAt: null
       };
+
+      // 生成客户端测试场次 ID，用于重复提交幂等与行为关联
+      function newTestId() {
+        return 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      }
 
       // 获取测试题目
       async function fetchQuestions() {
@@ -570,10 +578,20 @@
               testState.questions = parsedTest.questions;
               testState.userAnswers = parsedTest.userAnswers || {};
               testState.startTime = parsedTest.startTime;
+              testState.testId = parsedTest.testId || newTestId();
+              testState.testStartAt = parsedTest.testStartAt || Date.now();
+              saveTestToLocalStorage();
 
               document.getElementById('loading').style.display = 'none';
               renderQuestions(testState.questions);
               document.getElementById('submit-test').disabled = false;
+              if (window.KGTracker) {
+                KGTracker.track('test_start', {
+                  testId: testState.testId,
+                  questionCount: testState.questions.length,
+                  durationMs: Date.now() - testState.testStartAt
+                });
+              }
               return;
             } else {
               // 超过24小时，清除旧测试
@@ -600,12 +618,20 @@
 
           testState.questions = data.questions;
           testState.startTime = new Date().toISOString();
+          testState.testId = newTestId();
+          testState.testStartAt = Date.now();
 
           // 保存到localStorage
           saveTestToLocalStorage();
 
           document.getElementById('loading').style.display = 'none';
           renderQuestions(testState.questions);
+          if (window.KGTracker) {
+            KGTracker.track('test_start', {
+              testId: testState.testId,
+              questionCount: testState.questions.length,
+            });
+          }
           document.getElementById('submit-test').disabled = false;
         } catch (error) {
           console.error('获取题目出错:', error);
@@ -639,7 +665,9 @@
           questions: testState.questions,
           userAnswers: testState.userAnswers,
           startTime: testState.startTime,
-          isTestStarted: testState.isTestStarted
+          isTestStarted: testState.isTestStarted,
+          testId: testState.testId,
+          testStartAt: testState.testStartAt
         }));
       }
 
@@ -652,6 +680,7 @@
           const questionElement = document.createElement('div');
           questionElement.className = 'question-card';
           questionElement.id = `question-${question.id}`;
+          questionElement.dataset.questionId = String(question.id);
 
           let questionType;
           switch(question.type) {
@@ -719,6 +748,7 @@
 
           // 点击选项的事件处理
           optionItem.addEventListener('click', function() {
+            const previousAnswer = testState.userAnswers[question.id];
             // 清除同级选项的选中状态
             const siblingOptions = this.parentElement.querySelectorAll('.option-item');
             siblingOptions.forEach(option => option.classList.remove('selected'));
@@ -731,6 +761,16 @@
 
             // 保存到localStorage
             saveTestToLocalStorage();
+
+            if (window.KGTracker) {
+              KGTracker.track('test_answer', {
+                questionId: question.id,
+                type: '单选题',
+                action: 'select',
+                changed: previousAnswer !== key,
+                answered: true
+              });
+            }
           });
 
           optionsList.appendChild(optionItem);
@@ -816,6 +856,9 @@
             body: JSON.stringify({
               userId: userInfo.id,
               userType: userInfo.role, // 使用正确的角色字段
+              testId: testState.testId || newTestId(),
+              startedAt: testState.testStartAt || null,
+              durationMs: testState.testStartAt ? Date.now() - testState.testStartAt : null,
               answers: testState.userAnswers
             })
           });
@@ -837,6 +880,15 @@
           displayTestResults(result);
 
           testState.isTestSubmitted = true;
+
+          if (window.KGTracker) {
+            KGTracker.track('test_submit', {
+              testId: result.testId || testState.testId || '',
+              score: result.score,
+              percentage: result.percentageScore,
+              durationMs: testState.testStartAt ? Date.now() - testState.testStartAt : null
+            });
+          }
 
         } catch (error) {
           console.error('提交测试出错:', error);
@@ -873,7 +925,9 @@
           userAnswers: {},
           isTestStarted: false,
           isTestSubmitted: false,
-          startTime: null
+          startTime: null,
+          testId: null,
+          testStartAt: null
         };
 
         // 重置UI
@@ -890,6 +944,7 @@
       document.addEventListener('DOMContentLoaded', function() {
         // 检查登录状态
         checkLogin();
+        if (window.KGTracker) KGTracker.init({ page: "test" });
 
         // 开始测试按钮
         document.getElementById('start-test').addEventListener('click', function() {

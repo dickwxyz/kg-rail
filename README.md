@@ -15,7 +15,7 @@
 | 知识测试 | `test.html` | 从题库随机抽题（默认 10 题），答题后由服务端评分并记录作答 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
 | 登录 / 注册 | `login.html` / `register.html` | 按学号/工号长度区分学生与教师 |
-| 用户中心 | `user-center.html` | 个人信息维护；学生查看学情（开发中）；教师筛选查看学生信息与教学建议（开发中） |
+| 用户中心 | `user-center.html` | 个人信息维护；学生查看学情（开发中）；教师筛选查看学生信息，并在「教学建议」中查看班级行为分析、章节掌握度、AI 追问热点与 DeepSeek/规则生成的教学建议 |
 
 知识图谱、AI 问答和课程资源页面均要求登录后查看，未登录时显示登录提示卡片。
 
@@ -70,18 +70,49 @@ cp .env.example .env
 
 相关环境变量（均可选）：`CLAUDE_BIN`、`GRAPHIFY_BIN`、`GRAPH_ASK_DIR`、`GRAPH_ASK_TIMEOUT_MS`（默认 180000）、`GRAPH_ASK_MAX_CONCURRENT`（默认 2）、`GRAPH_CLAUDE_MODEL`。未安装时点击图谱模式提问会返回明确错误，不会回退 DeepSeek。
 
+### 教学建议与演示数据
+
+教师登录后进入「个人中心 → 教学建议」，可以选择自己名下的课程与时间范围，查看：
+
+- 班级 KPI、章节掌握度（条形图 + 热力格）、学习活跃趋势、追问类型与资源类型环形图；
+- AI 提问与追问分析（追问率、深度话题、困惑主题、未解决话题）；
+- 资源使用明细（谁看了哪个章节文档/PPT/视频、下载了什么）；
+- 学生明细与单人详情（章节正确率、测试场次、对话追问、资源使用）；
+- 题目章节归因（AI 预填 + 逐题人工修正）；
+- 结合教师录入的“当前教学进度 + 备注 + 下节课计划”生成教学建议（DeepSeek 叙述，失败时规则兜底）。
+
+首次体验可直接播种演示数据（只影响演示教师，不影响真实班级）：
+
+```bash
+node scripts/seed-teaching-demo.js          # 幂等播种 4 个演示课程
+node scripts/seed-teaching-demo.js --reset  # 删除并重建
+```
+
+演示教师：工号 `9999`，密码 `1234`。四个场景分别为“基础薄弱”“高投入低产出”“整体良好”“数据不足”，每个场景预生成一份规则建议，无 DeepSeek Key 也能查看。
+
+行为埋点由 `js/tracker.js` 完成，只记录页面停留、资源/链接点击、图谱节点/搜索、AI 提问与回答、测试节奏、输入长度/粘贴/停留；**不记录答题输入正文、按键、剪贴板或鼠标移动**。事件默认保留 365 天，可用 `TEACHING_EVENT_RETENTION_DAYS` 调整。
+
 ### 首次运行需要准备的数据
 
 仓库通过 `.gitignore` 排除了以下内容，克隆后需要自行准备：
 
-1. **`user.db`**：数据库文件不在仓库中。首次运行前需创建，表结构见下方[数据库](#数据库)。若文件不存在，`sqlite3` 会创建空文件，但登录、注册、测试等接口会因缺表而报错。AI 问答使用的 `chat_topics`、`chat_messages` 由 `server.js` 启动时自动创建，无需手工建表。
+1. **`user.db`**：数据库文件不在仓库中。首次运行前需创建，表结构见下方[数据库](#数据库)。若文件不存在，`sqlite3` 会创建空文件，但登录、注册、测试等接口会因缺表而报错。AI 问答使用的 `chat_topics`、`chat_messages` 以及教学分析使用的 `chapters`、`question_chapters`、`learning_events`、`test_attempts`、`ai_topic_analysis`、`course_progress`、`teaching_reports`、`teaching_meta` 由服务端启动时自动创建，无需手工建表。
 2. **`resources/`**：课程资源（教材 PDF、PPT、视频等）体积达数十 GB，未纳入版本库。需按 `resources.html` 中的链接路径放入对应目录，资源链接才能打开。
+
+教学建议的演示数据保存在本地 `user.db` 中，不会随仓库分发；可随时用 `node scripts/seed-teaching-demo.js --reset` 重建。需要把测试服务器与真实库隔离时，可使用 `DB_PATH=/tmp/kg-rail-test.db node server.js`。
 
 ## 目录结构
 
 ```
 kg-rail/
 ├── server.js                 # Express 服务：静态托管 + 认证/用户/测试接口
+├── lib/
+│   └── teaching.js           # 教学分析：事件、归因、统计、建议生成
+├── js/
+│   ├── tracker.js            # 共享行为埋点
+│   └── teaching-center.js    # 教学建议页控制器与手写 SVG 图表
+├── scripts/
+│   └── seed-teaching-demo.js # 教学建议演示数据（4 个场景，幂等）
 ├── user.db                   # SQLite 数据库（未纳入版本库，静态访问已拦截）
 ├── .env.example              # 环境变量模板（复制为 .env 使用）
 ├── package.json
@@ -110,7 +141,7 @@ kg-rail/
 
 ## 后端 API
 
-服务端代码集中在 `server.js`，接口如下：
+主服务在 `server.js`，教学分析路由与统计逻辑在 `lib/teaching.js`，接口如下：
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -121,9 +152,25 @@ kg-rail/
 | `GET` | `/students?lesson=&grade=&teacher=` | 按课程/年级/教师筛选学生列表 |
 | `GET` | `/student-filter-options?field=` | 获取筛选项去重值，`field` 仅允许 `lesson`、`grade`、`teacher` |
 | `GET` | `/api/questions?limit=&type=&chapter=&difficulty=` | 随机抽取题目（默认 10 题），响应中已剔除 `answer` |
-| `POST` | `/api/submit-test` | 提交答案，服务端评分并将作答记录写入 `answers` 表 |
+| `POST` | `/api/submit-test` | 提交答案，服务端评分并写入 `answers` 与 `test_attempts`（同一事务，`testId` 幂等） |
 | `GET` | `/api/config` | 返回服务端 `.env` 中的 DeepSeek API Key（供 AI 问答页使用） |
 | `POST` | `/api/graph-ask` | 知识图谱问答：graph.json 检索子图 → 匹配课程 Markdown 原文片段 → `claude -p` 循证回答，返回答案、证据节点/关系与文档原文依据 |
+| `POST` | `/api/events` | 批量行为埋点；白名单事件、payload 过滤、限流与去重 |
+| `GET` | `/api/teaching/courses` | 教师课程、学生数与已录教学进度 |
+| `GET` | `/api/teaching/overview` | 班级 KPI、数据质量、高风险学生 |
+| `GET` | `/api/teaching/chapters` | 16 章掌握度、覆盖率、困惑热度、重讲优先级 |
+| `GET` | `/api/teaching/students` | 学生明细、班级均值、风险标签 |
+| `GET` | `/api/teaching/student/:userId` | 单生详情 |
+| `GET` | `/api/teaching/dialogues` | AI 话题、追问率、深度、困惑主题、未解决话题 |
+| `GET` | `/api/teaching/resources` | 资源类型/章节分布与 Top 条目 |
+| `GET` | `/api/teaching/trend` | 按天学习趋势 |
+| `GET`/`POST` | `/api/teaching/progress` | 教学进度、备注、下节课计划 |
+| `POST` | `/api/teaching/report` | 生成/缓存教学建议（DeepSeek + 规则兜底） |
+| `GET` | `/api/teaching/report/latest` | 最近一次建议与证据 |
+| `GET` | `/api/teaching/questions/attribution` | 题目—章节映射与复核列表 |
+| `PUT` | `/api/teaching/questions/:id/chapter` | 人工修正题目章节 |
+| `POST` | `/api/teaching/classify-questions` | 图谱匹配 + DeepSeek 预填题目章节 |
+| `POST` | `/api/teaching/analyze-dialogues` | 按话题分析追问类型、深度与未解决状态 |
 | `GET` | `/api/topics?userId=` | 获取用户话题列表，按最近活跃排序 |
 | `POST` | `/api/topics` | 新建话题（`userId`、`title`） |
 | `PUT` | `/api/topics/:id` | 重命名话题 |
@@ -147,6 +194,14 @@ kg-rail/
 | `answers` | `id`、`test_id`、`datetime`、`user_id`、`question_id`、`input_answer`、`accuracy` | 每次提交按题目逐条记录 |
 | `chat_topics` | `id`、`user_id`、`title`、`created_at`、`updated_at` | AI 问答话题；时间存毫秒时间戳 |
 | `chat_messages` | `id`、`topic_id`、`role`、`content`、`created_at`、`meta` | AI 问答消息，`role` 为 `user`/`assistant`；`meta` 存图谱证据等 JSON |
+| `chapters` | `chapter_no`、`name`、`source_file`、`graph_node_id`、`keywords` | 16 章字典，由 `data/graph.json` 自动生成 |
+| `question_chapters` | `question_id`、`chapter_no`、`weight`、`knowledge_point`、`confidence`、`source`、`reviewed` | 题目—章节映射，支持一题多章与人工修正 |
+| `learning_events` | `event_uid`、`session_id`、`user_id`、`role`、`course`、`page`、`event`、`chapter_no`、`payload`、`client_ts`、`server_ts`、`day` | 行为事件，默认保留 365 天 |
+| `test_attempts` | `test_id`、`user_id`、`course`、`score`、`full_score`、`score_rate`、`chapter_breakdown`、`duration_ms` | 测试场次汇总 |
+| `ai_topic_analysis` | `topic_id`、`user_id`、`course`、`chapter_no`、`follow_up_count`、`follow_up_types`、`depth_score`、`unresolved`、`themes`、`representative_question` | AI 对话追问分析缓存 |
+| `course_progress` | `teacher_id`、`course`、`current_chapter`、`note`、`next_plan`、`updated_at` | 教师教学进度 |
+| `teaching_reports` | `cache_key`、`teacher_id`、`course`、`facts_json`、`result_json`、`llm_status`、`model` | 教学建议缓存 |
+| `teaching_meta` | `key`、`value`、`updated_at` | 教学模块元信息 |
 | `degree` | `x`、`y` | 历史遗留的图谱坐标表，当前代码未使用 |
 
 评分规则（`POST /api/submit-test`）：

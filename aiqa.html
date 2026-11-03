@@ -384,15 +384,15 @@
 
             <div class="input-area">
                 <div class="toolbar">
-                    <button class="tool-btn primary" onclick="newTopic()">+ 新建话题</button>
+                    <button class="tool-btn primary" data-track="new_topic" onclick="newTopic()">+ 新建话题</button>
                     
                     <!-- 模型选择下拉菜单 -->
                     <select class="model-select" id="model-select">
                         <option value="deepseek-flash">DeepSeek Flash (V4.1)</option>
                     </select>
 
-                    <button class="tool-btn" id="quick-prompts-btn" onclick="toggleQuickPrompts()">常用提示词</button>
-                    <button class="tool-btn" id="knowledge-graph-btn" onclick="toggleGraphMode()" aria-pressed="false">知识图谱</button>
+                    <button class="tool-btn" id="quick-prompts-btn" data-track="quick_prompts" onclick="toggleQuickPrompts()">常用提示词</button>
+                    <button class="tool-btn" id="knowledge-graph-btn" data-track="graph_mode_toggle" onclick="toggleGraphMode()" aria-pressed="false">知识图谱</button>
                 </div>
                 <div class="quick-prompts-panel" id="quick-prompts">
                     <div class="quick-prompts">
@@ -407,14 +407,14 @@
                 </div>
                 <div class="input-row">
                     <textarea id="user-input" placeholder="请输入关于轨道交通的问题... (Shift+Enter 换行)"></textarea>
-                    <button class="send-btn" id="send-btn" onclick="sendMessage()">发送</button>
+                    <button class="send-btn" id="send-btn" data-track="ai_send" onclick="sendMessage()">发送</button>
                 </div>
             </div>
         </main>
     </div>
 
+    <script src="./js/tracker.js"></script>
     <script>
-        // --- 1. 登录状态逻辑 (复用 index.html) ---
         function checkLogin() {
             const userInfoStr = localStorage.getItem("userInfo");
             const userInfo = document.getElementById("user-info");
@@ -448,6 +448,7 @@
         }
         window.onload = function () {
             checkLogin();
+            if (window.KGTracker) KGTracker.init({ page: "aiqa" });
             loadApiConfig();
             if (getUserId()) loadTopics();
         };
@@ -1402,6 +1403,14 @@
             // 首次发言时创建后端话题；保存失败不阻塞聊天
             const topicId = await ensureTopic(text);
             saveMessageToServer(topicId, 'user', text, userMsgEl);
+            const sendStartedAt = Date.now();
+            if (window.KGTracker) {
+                KGTracker.track('ai_question', {
+                    topicId: topicId || '',
+                    mode: useGraph ? 'graph' : 'normal',
+                    questionLen: text.length,
+                });
+            }
 
             try {
                 if (useGraph) {
@@ -1423,6 +1432,15 @@
                         mode: 'graph',
                         evidence,
                     });
+                    if (window.KGTracker) {
+                        KGTracker.track('ai_answer', {
+                            topicId: topicId || '',
+                            mode: 'graph',
+                            responseMs: Date.now() - sendStartedAt,
+                            success: true,
+                            nodeIds: (evidence.nodes || []).map((n) => n.id).slice(0, 10),
+                        });
+                    }
                 } else {
                     const response = await fetch("https://api.deepseek.com/chat/completions", {
                         method: "POST",
@@ -1454,10 +1472,26 @@
                     aiMsgEl.dataset.history = '1';
                     aiMsgEl.dataset.convIndex = String(conversationHistory.length - 1);
                     saveMessageToServer(topicId, 'assistant', aiReply, aiMsgEl);
+                    if (window.KGTracker) {
+                        KGTracker.track('ai_answer', {
+                            topicId: topicId || '',
+                            mode: 'normal',
+                            responseMs: Date.now() - sendStartedAt,
+                            success: true,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error(error);
                 if (viewAtSend !== viewToken) return;
+                if (window.KGTracker) {
+                    KGTracker.track('ai_answer', {
+                        topicId: topicId || '',
+                        mode: useGraph ? 'graph' : 'normal',
+                        responseMs: Date.now() - sendStartedAt,
+                        success: false,
+                    });
+                }
                 appendMessage('ai', useGraph
                     ? `❌ 知识图谱问答失败：${error.message}`
                     : `❌ 出错了: ${error.message}`);
