@@ -111,7 +111,7 @@ AI 问答的话题与消息按 `userId` 存在服务端 `chat_topics` / `chat_me
 - **login.html / register.html**：认证页；注册表单随用户类型切换学生/教师字段
 - **knowledge-graph.html**：知识图谱。登录后加载 `./data/graph.json`（GraphRAG 输出），转换为 vis.js 节点/边；未登录显示提示卡片并隐藏图谱
 - **aiqa.html**：AI 问答。登录后可用；左侧切换模型，页面加载时 `loadApiConfig()` 从 `/api/config` 读取 Key 并填入输入框，也可手动填写；前端源码不包含密钥；公式先统一为 `$`/`$$` 定界符，再由本地 MathJax 排版。话题列表来自 `/api/topics`，显示创建时间（`YYYY-MM-DD HH:mm:ss`）；新建话题先创建本地草稿，首条消息发出时才 `POST /api/topics` 落库，空草稿离开即丢弃；支持切换、重命名、删除话题，并同步单条消息的删除与 AI 重新生成。`viewToken` 用于丢弃切换话题后返回的过期 AI 回复。工具栏“知识图谱”按钮是持续开关：开启后按钮加 `.active`、显示提示条，提问改走 `POST /api/graph-ask`；回答下方渲染可折叠的“知识图谱检索依据”（节点、关系、章节原文片段），并用 `<mark class="kg-hl">` 高亮答案中的节点名。证据存入 assistant 消息的 `meta`，刷新后恢复；图谱失败只显示错误，不回退 DeepSeek
-- **test.html**：知识测试。功能暂未开放：各页面保留导航入口，点击仅弹提示；`server.js` 在静态服务前拦截并 302 重定向到首页（含 URL 编码绕过）。页面本身不再可达
+- **test.html**：知识测试。登录后点击「开始测试」调用 `/api/questions` 随机抽题（默认 10 题），渲染 `.question-card`；提交后调用 `/api/submit-test` 由服务端评分。测试状态写入 `localStorage.currentTest`，保留 24 小时
 - **resources.html**：课程资源导航，按教材/章节文档/PPT/视频/论文/作业/补充材料分区；未登录显示提示
 - **user-center.html**：个人信息编辑；学生显示「学情检测」（开发中），教师显示「学生信息」筛选表格与「教学建议」（开发中）
 

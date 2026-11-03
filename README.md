@@ -12,7 +12,7 @@
 | 课程首页 | `index.html` | 课程简介、课程信息、学习目标、课程大纲、教师简介 |
 | 知识图谱 | `knowledge-graph.html` | 基于 vis.js 的 GraphRAG 课程知识图谱可视化，支持节点搜索 |
 | AI 问答 | `aiqa.html` | 基于 DeepSeek 的问答，话题与消息按用户持久化，支持新建/切换/重命名/删除，Markdown/代码/公式渲染；可切换“知识图谱模式”，由 `claude -p` 结合 graphify 子图与课程原文循证回答，并展示、高亮检索依据 |
-| 知识测试（暂未开放） | `test.html` | 导航入口保留，点击仅提示；服务端将直接访问重定向回首页 |
+| 知识测试 | `test.html` | 从题库随机抽题（默认 10 题），答题后由服务端评分并记录作答 |
 | 课程资源 | `resources.html` | 教材、章节文档、PPT、MOOC 视频、论文、作业与补充材料 |
 | 登录 / 注册 | `login.html` / `register.html` | 按学号/工号长度区分学生与教师 |
 | 用户中心 | `user-center.html` | 个人信息维护；学生查看学情（开发中）；教师筛选查看学生信息与教学建议（开发中） |
@@ -89,7 +89,7 @@ kg-rail/
 ├── login.html / register.html
 ├── knowledge-graph.html      # 知识图谱可视化
 ├── aiqa.html                 # AI 问答
-├── test.html                 # 知识测试（入口保留，页面已关闭）
+├── test.html                 # 知识测试
 ├── resources.html            # 课程资源导航
 ├── user-center.html          # 用户中心
 ├── data/
